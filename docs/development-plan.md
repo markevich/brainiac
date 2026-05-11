@@ -77,6 +77,34 @@ Exit criteria:
 
 - The AI can find relevant notes and read selected sections without scanning the whole vault.
 
+Implemented commands:
+
+```bash
+PYTHONPATH=src python3 -m brainiac search "query"
+PYTHONPATH=src python3 -m brainiac inspect path/to/note.md
+PYTHONPATH=src python3 -m brainiac read path/to/note.md --section "Heading"
+PYTHONPATH=src python3 -m brainiac related path/to/note.md
+```
+
+Implementation notes:
+
+- `scan` creates a searchable FTS5 table from Markdown path, title, headings, tags, tasks, and body text.
+- `search` reads the existing index only; it does not rescan the vault.
+- `inspect` returns bounded metadata: file facts, headings, tags, tasks, outgoing links, backlinks, and ambiguous-link warnings.
+- `read` returns a whole file or a single Markdown heading section with a max-character budget.
+- `related` combines outgoing links, backlinks, preferred ambiguous-link candidates, shared tags, same-folder proximity, and title/heading lexical overlap.
+- Ambiguous wikilinks keep all candidates and a deterministic preferred path. This is a best-effort Obsidian-compatible guess, not a guarantee of Obsidian's internal resolver.
+- Generic task tags such as `#todo/now` are intentionally weak relatedness signals so they do not dominate explicit links.
+- CLI errors are short user-facing messages instead of Python tracebacks for expected cases such as missing indexes, missing paths, and missing sections.
+
+Live-vault check:
+
+- Rebuilt the external Obsidian vault index successfully.
+- Search worked for Cyrillic terms, task tags, ticket-like tokens, body text, and path/title terms.
+- `inspect` correctly surfaced existing ambiguous links with candidates.
+- `read --section` returned bounded sections.
+- `related` initially over-ranked generic inbox/task-tag neighbors; scoring was tuned so explicit links and preferred ambiguous candidates rank first.
+
 ## Phase 3: Routing and Dedupe
 
 Goal: help place new information into the vault.
