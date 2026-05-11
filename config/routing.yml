@@ -29,6 +29,28 @@ queue:
 generated:
   root: "Brainiac/memory/generated/"
 
+inbox_roots:
+  - "0_Inbox/"
+
+project_roots:
+  - "1_Projects/"
+
+area_roots:
+  - "2_Areas/"
+
+resource_roots:
+  - "3_Resources/"
+  - "ibooks-highlights/"
+
+synthesis_roots:
+  - "Brainiac/memory/synthesis/"
+
+queue_roots:
+  - "Brainiac/memory/queue/"
+
+generated_roots:
+  - "Brainiac/memory/generated/"
+
 disabled_destination_sections:
   - "generated"
 
@@ -37,6 +59,14 @@ important_terms:
   - "ai"
   - "dq"
   - "ui"
+
+stopwords:
+  - "and"
+  - "the"
+  - "для"
+  - "как"
+  - "что"
+  - "это"
 
 sensitive_destination_keys:
   - "areas.health"

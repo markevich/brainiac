@@ -12,11 +12,20 @@ HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
 UNSAFE_FILENAME_RE = re.compile(r"[\\/:*?\"<>|]+")
 GENERIC_DESTINATIONS = {"default", "root"}
 CONFIG_SECTIONS = {
+    "area_roots",
+    "archive_roots",
     "disabled_destination_sections",
     "important_terms",
+    "generated_roots",
+    "inbox_roots",
+    "project_roots",
+    "queue_roots",
+    "resource_roots",
     "rules",
     "sensitive_destination_keys",
     "sensitive_path_prefixes",
+    "stopwords",
+    "synthesis_roots",
 }
 DUPLICATE_ROUTE_BOOST_MIN_SCORE = 30
 LOW_CONFIDENCE_ROUTE_SCORE = 20
@@ -34,6 +43,7 @@ class RoutingConfig:
     destinations: tuple[RoutingDestination, ...]
     disabled_destination_sections: frozenset[str]
     important_terms: frozenset[str]
+    stopwords: frozenset[str]
     sensitive_destination_keys: frozenset[str]
     sensitive_path_prefixes: tuple[str, ...]
 
@@ -115,6 +125,7 @@ def load_routing_config(path: Path) -> RoutingConfig:
             section.casefold().strip() for section in lists.get("disabled_destination_sections", [])
         ),
         important_terms=frozenset(_normalize_term(term) for term in lists.get("important_terms", [])),
+        stopwords=frozenset(_normalize_term(term) for term in lists.get("stopwords", [])),
         sensitive_destination_keys=frozenset(
             _normalize_destination_key(key) for key in lists.get("sensitive_destination_keys", [])
         ),

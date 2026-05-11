@@ -64,9 +64,11 @@ PYTHONPATH=src python3 -m brainiac read path/to/note.md --section "Heading"
 PYTHONPATH=src python3 -m brainiac related path/to/note.md
 PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac structure
 ```
 
 `route` and `find-duplicates` are dry-run helpers. They suggest destinations, likely overlaps, and safe note/link names, but they do not write to the vault.
+`structure` analyzes configured vault roles and profiles, then reports unconfigured areas/projects/resources that may need routing coverage.
 
 See:
 
@@ -74,6 +76,7 @@ See:
 - [docs/context-brief.md](docs/context-brief.md)
 - [docs/concept.md](docs/concept.md)
 - [docs/development-plan.md](docs/development-plan.md)
+- [docs/phase-4-structure-notes.md](docs/phase-4-structure-notes.md)
 - [docs/write-log-format.md](docs/write-log-format.md)
 - [docs/source-takeaways.md](docs/source-takeaways.md)
 - [docs/operator-context.md](docs/operator-context.md)
