@@ -163,14 +163,16 @@ Tasks:
 
 - [ ] Study how PARA and alternatives map to Brainiac use cases.
 - [ ] Define Brainiac's recommended generic vault shape without requiring users to adopt it exactly.
-- [ ] Separate universal roles from user-specific paths: inbox, projects, areas, resources, archive, generated, synthesis, queue.
-- [ ] Add routing config schema for roles, aliases, sensitive domains, important short tokens, and domain-specific hints.
-- [ ] Define a high-level vault map index over roles, areas, projects, resources, and synthesis roots.
-- [ ] Generate compact area/project profiles from existing notes: title, path, role, tags, top terms, representative notes, recent activity, sensitive flag, and short human-readable summary.
+- [x] Separate universal roles from user-specific paths: inbox, projects, areas, resources, archive, generated, synthesis, queue.
+- [x] Add an initial routing config schema for role roots, sensitive domains, important short tokens, and disabled destination sections.
+- [x] Define an initial runtime vault map over roles, areas, projects, resources, and synthesis roots.
+- [x] Generate compact area/project/resource profiles from existing notes: path, role, tags, top terms, representative notes, and sensitive flag.
+- [ ] Add profile summaries and recent activity.
+- [ ] Add aliases and domain-specific hints as optional local overrides.
 - [ ] Use the vault map as the first routing layer: rank candidate areas/projects by profile before selecting a destination note.
 - [ ] Treat manual hints as optional local overrides, not as the primary multilingual routing strategy.
 - [ ] Support empty or sparse vaults with generic role templates and "candidate new area" suggestions.
-- [ ] Add a command or report that diagnoses a vault's structure against the recommended model.
+- [x] Add a command or report that diagnoses a vault's structure against the recommended model.
 - [ ] Document migration-safe recommendations: suggest, do not move files automatically.
 - [ ] Revisit Phase 3 scoring once role metadata exists, so routing is not over-dependent on folder names.
 
@@ -180,6 +182,20 @@ Exit criteria:
 - Routing rules can be portable across vaults by role, while local paths remain config-only.
 - No source code contains user-specific vault path assumptions.
 - Routing decisions can be made from compact area/project profiles instead of hardcoded multilingual keyword dictionaries.
+
+Implemented command:
+
+```bash
+PYTHONPATH=src python3 -m brainiac structure
+```
+
+Implementation notes:
+
+- `structure` reads the existing index and `config/routing.yml`; it does not rescan or write to the vault.
+- Role roots are config-driven, with observed defaults used only as a compatibility fallback.
+- Profiles currently include role, path, note count, file count, routing coverage status, sensitive flag, top tags, top terms, and representative notes.
+- Flat source collections such as imported book highlights are treated as one resource profile instead of one profile per file.
+- The command reports unconfigured profiles and recommendations such as missing routing destinations for detected areas.
 
 ## Phase 5: Synthesis Primitives
 

@@ -11,6 +11,7 @@ from .retrieval import inspect_path, read_path, related_paths
 from .routing import find_duplicates, route_content
 from .scanner import scan_vault
 from .search import search_index
+from .structure import analyze_structure
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,6 +77,16 @@ def main(argv: list[str] | None = None) -> int:
     duplicates_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     duplicates_parser.add_argument("--limit", type=int, default=5, help="Maximum number of results.")
 
+    structure_parser = subparsers.add_parser("structure", help="Analyze configured vault roles and profiles.")
+    structure_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    structure_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    structure_parser.add_argument("--limit", type=int, default=100, help="Maximum number of profiles.")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "scan":
@@ -92,6 +103,8 @@ def main(argv: list[str] | None = None) -> int:
             return _route(args)
         if args.command == "find-duplicates":
             return _find_duplicates(args)
+        if args.command == "structure":
+            return _structure(args)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -245,6 +258,47 @@ def _find_duplicates(args: argparse.Namespace) -> int:
     for position, result in enumerate(results, start=1):
         print(f"{position}. {result.path} ({result.score})")
         print(f"   {', '.join(result.reasons)}")
+    return 0
+
+
+def _structure(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    analysis = analyze_structure(index_path, args.routing_config, max_profiles=args.limit)
+    print("Role roots:")
+    if not analysis.role_roots:
+        print("  No role roots configured.")
+    for root in analysis.role_roots:
+        print(f"  {root.role}: {root.path} ({root.source})")
+
+    print("Profiles:")
+    if not analysis.profiles:
+        print("  No profiles found.")
+    for profile in analysis.profiles:
+        configured = "route-configured" if profile.configured else "route-missing"
+        sensitive = ", sensitive" if profile.sensitive else ""
+        print(
+            f"  {profile.role}: {profile.path} "
+            f"({profile.note_count} notes, {profile.file_count} files, {configured}{sensitive})"
+        )
+        if profile.top_tags:
+            print(f"    tags: {', '.join(profile.top_tags)}")
+        if profile.top_terms:
+            print(f"    terms: {', '.join(profile.top_terms)}")
+        if profile.representative_notes:
+            print(f"    examples: {', '.join(profile.representative_notes[:3])}")
+
+    print("Unconfigured profiles:")
+    if not analysis.unconfigured_profiles:
+        print("  None.")
+    for profile in analysis.unconfigured_profiles:
+        print(f"  {profile.role}: {profile.path} ({profile.note_count} notes)")
+
+    print("Recommendations:")
+    if not analysis.recommendations:
+        print("  None.")
+    for recommendation in analysis.recommendations:
+        print(f"  - {recommendation}")
     return 0
 
 
