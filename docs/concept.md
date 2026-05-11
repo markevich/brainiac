@@ -11,7 +11,7 @@ Brainiac is not an Obsidian clone.
 It is a local memory/retrieval layer over plain files:
 
 ```text
-local vault -> disposable indexes -> bounded tools -> AI operator -> optional views
+local vault -> disposable indexes -> bounded tools -> Jarvis -> optional views
 ```
 
 Obsidian can remain the human-facing editor. Brainiac provides the intelligence layer.
@@ -116,4 +116,3 @@ Brainiac/
 - Build a complex graph database before SQLite is insufficient.
 - Generate endless daily briefs that no one reads.
 - Let autonomous agents rewrite operating rules without review.
-

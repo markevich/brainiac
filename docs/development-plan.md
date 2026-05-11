@@ -127,7 +127,7 @@ Tasks:
 
 Exit criteria:
 
-- Jarvis or another AI operator can use Brainiac as a tool provider.
+- Jarvis can use Brainiac as a tool provider.
 
 ## Phase 7: Obsidian Integration
 

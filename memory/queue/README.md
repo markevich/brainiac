@@ -1,6 +1,6 @@
 # Brainiac Queue
 
-Queue files describe work that Brainiac or an AI operator should process later.
+Queue files describe work that Brainiac or Jarvis should process later.
 
 Examples:
 
@@ -10,4 +10,3 @@ Examples:
 - `GENERATE-dashboard.md`
 
 Queue files should be explicit and reviewable.
-

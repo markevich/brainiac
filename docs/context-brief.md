@@ -11,7 +11,7 @@ The stronger idea is:
 ```text
 Markdown / SQLite / JSON / YAML / CSV = durable source of truth
 HTML = generated presentation layer
-Brainiac = local retrieval, routing, synthesis, and safe-write backend for AI operators
+Brainiac = local retrieval, routing, synthesis, and safe-write backend for Jarvis
 ```
 
 The key problem is context debt. Once a vault has hundreds or thousands of notes, an AI cannot read all files every time. It needs a local query layer that returns bounded context.
@@ -35,12 +35,14 @@ Brainiac should be a local memory substrate for AI agents:
 ```text
 Obsidian = human-facing editor and vault UI
 Brainiac = memory/retrieval backend
-Jarvis or another agent = operator
+Jarvis = default operator
 Markdown/SQLite/JSON = truth
 HTML = view/artifact
 ```
 
-Jarvis and Brainiac can cooperate, but Brainiac should not depend on Jarvis. Brainiac is generic. Jarvis can be one operator/client.
+Jarvis and Brainiac are separate layers. Jarvis operates. Brainiac remembers, retrieves, routes, and exposes safe tools.
+
+Brainiac should remain usable as a generic core, but this project uses `Jarvis` as the default operator name.
 
 ## Important Design Decisions
 
@@ -176,4 +178,3 @@ Implication:
 ## Current Best Formulation
 
 Brainiac is an AI-first local knowledge operating system over plain files, with disposable indexes, bounded retrieval tools, persistent synthesis notes, controlled writes, and generated HTML views.
-

@@ -28,7 +28,7 @@ Avoid:
 Repeated article pattern:
 
 - use Obsidian/plain Markdown as a local vault;
-- add an AI operator through filesystem/MCP;
+- add an operator through filesystem/MCP;
 - maintain predictable folders like inbox, projects, areas, resources, daily, generated, queue, archive;
 - use a master instruction file;
 - automate research, briefings, weekly reviews, project status, client briefs, etc.
@@ -125,4 +125,3 @@ Tool responses should include `why`, `source`, and confidence-like signals where
 - Treating generated briefings as proof the system is learning.
 - Over-indexing before there is a real retrieval workflow.
 - Assuming embeddings alone solve organization.
-

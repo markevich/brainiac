@@ -13,7 +13,7 @@ Vault with Markdown / SQLite / JSON / assets
 Disposable indexes and bounded retrieval tools
         |
         v
-AI operator that searches, routes, dedupes, synthesizes, and writes safely
+Jarvis searches, routes, dedupes, synthesizes, and writes safely
         |
         v
 Optional views: Obsidian, CLI, local HTML dashboards
@@ -24,7 +24,7 @@ Optional views: Obsidian, CLI, local HTML dashboards
 - `Obsidian` is the editor and human-facing vault UI.
 - `Markdown/SQLite/JSON` are source-of-truth formats.
 - `Brainiac` is the local memory/retrieval backend.
-- `Jarvis or another agent` is the operator that talks to Brainiac.
+- `Jarvis` is the default operator that talks to Brainiac.
 - `HTML` is a generated presentation layer, not durable truth.
 
 ## First Principle

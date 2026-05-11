@@ -1,14 +1,14 @@
-# Operator Context: Using Brainiac With a Vault
+# Jarvis Operator Context: Using Brainiac With a Vault
 
-This file is for future AI sessions operating on a user's vault through Brainiac.
+This file is for future Jarvis sessions operating on a user's vault through Brainiac.
 
 It is different from development context. Development context is about building Brainiac. Operator context is about using Brainiac safely.
 
-## Operator Role
+## Jarvis Role
 
-The operator is the AI assistant that uses Brainiac to work with a vault.
+Jarvis is the operator that uses Brainiac to work with a vault.
 
-The operator should:
+Jarvis should:
 
 - capture raw information;
 - search and retrieve context;
@@ -88,5 +88,4 @@ Important known traits:
 - imported book highlights;
 - health and family notes that require caution;
 - task tags like `#todo/now`, `#todo/soon`, `#todo/someday`;
-- root `Softswiss/` excluded by default because it has its own Jarvis/work context.
-
+- project-specific folders may be excluded by policy when they have their own separate operating context.

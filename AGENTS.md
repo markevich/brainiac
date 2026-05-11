@@ -8,7 +8,7 @@ Before doing substantial work in this repository, load this context in order:
 2. `docs/context-brief.md` — condensed context from the original design discussion.
 3. `docs/concept.md` — conceptual architecture and non-goals.
 4. `docs/development-plan.md` — current implementation roadmap.
-5. `operator.md` and `docs/operator-context.md` only if the task is about operating on a vault, not developing Brainiac itself.
+5. `operator.md` and `docs/operator-context.md` only if the task is about Jarvis operating on a vault, not developing Brainiac itself.
 
 ## Development Mode
 
@@ -16,7 +16,9 @@ Use this mode when implementing Brainiac itself.
 
 Rules:
 
-- Keep Brainiac generic. Do not hard-code Softswiss or Jarvis-specific assumptions.
+- Keep Brainiac generic.
+- Treat Jarvis as the default operator name, not as a dependency on any existing Jarvis project.
+- Do not import session flows, banners, or project-specific instructions from other Jarvis repositories.
 - Prefer CLI-first implementation before MCP, Obsidian plugin, or background daemon.
 - Treat indexes as disposable caches rebuildable from source files.
 - Start with structural and lexical retrieval before embeddings.
@@ -26,7 +28,7 @@ Rules:
 
 ## Operator Mode
 
-Use this mode when Brainiac or an AI operator is working with a user's vault.
+Use this mode when Jarvis is working with a user's vault through Brainiac.
 
 Rules:
 
@@ -58,4 +60,3 @@ memory/
   logs/
 operator.md
 ```
-

@@ -5,7 +5,6 @@ vault:
   root: "/Users/slava.markevich/Library/Mobile Documents/iCloud~md~obsidian/Documents/Second brain"
 
 exclude:
-  - "Softswiss/"
   - ".obsidian/"
   - ".trash/"
   - "Brainiac/memory/index/"
@@ -32,4 +31,3 @@ generated_paths:
 index:
   path: "Brainiac/memory/index/brainiac.sqlite"
   disposable: true
-
