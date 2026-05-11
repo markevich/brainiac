@@ -170,7 +170,7 @@ def _resolve_wikilinks(
 def _preferred_candidate(source_path: str, candidates: tuple[str, ...]) -> str:
     source_parts = Path(source_path).parts
 
-    def score(candidate: str) -> tuple[int, int, int, str]:
+    def score(candidate: str) -> tuple[int, int, str]:
         candidate_parts = Path(candidate).parts
         common_prefix = 0
         for source_part, candidate_part in zip(source_parts, candidate_parts):
@@ -178,6 +178,6 @@ def _preferred_candidate(source_path: str, candidates: tuple[str, ...]) -> str:
                 break
             common_prefix += 1
         same_top_folder = int(bool(source_parts and candidate_parts and source_parts[0] == candidate_parts[0]))
-        return (-common_prefix, -same_top_folder, len(candidate_parts), candidate)
+        return (-common_prefix, -same_top_folder, candidate)
 
     return min(candidates, key=score)

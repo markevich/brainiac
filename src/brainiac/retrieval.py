@@ -197,6 +197,7 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
             ).fetchall()
         }
         for tag in note_tags:
+            tag_score = _tag_score(tag)
             for file_path in connection.execute(
                 """
                 SELECT DISTINCT file_path
@@ -205,7 +206,7 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
                 """,
                 (tag, note_path),
             ).fetchall():
-                add(file_path[0], 20, f"shared tag {tag}")
+                add(file_path[0], tag_score, f"shared tag {tag}")
 
         folder = Path(note_path).parent.as_posix()
         if folder != ".":
@@ -219,7 +220,7 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
                 """,
                 (note_path, folder_prefix + "%"),
             ).fetchall():
-                add(file_path[0], 10, "same folder")
+                add(file_path[0], 5, "same folder")
 
         source_terms = _search_terms(
             connection.execute(
@@ -241,7 +242,7 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
                 (note_path,),
             ).fetchall():
                 overlap = source_terms & _search_terms((path_text, title, headings))
-                if overlap:
+                if len(overlap) >= 2:
                     add(path, min(len(overlap), 5) * 5, "shared title/heading terms")
 
     ordered = sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:limit]
@@ -270,6 +271,12 @@ def _search_terms(row) -> set[str]:
         return set()
     text = " ".join(value or "" for value in row)
     return {token.lower() for token in TOKEN_RE.findall(text) if len(token) > 2}
+
+
+def _tag_score(tag: str) -> int:
+    if tag.startswith("#todo/"):
+        return 5
+    return 20
 
 
 def _vault_root(connection: sqlite3.Connection) -> Path:

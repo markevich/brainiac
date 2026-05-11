@@ -55,16 +55,20 @@ def main(argv: list[str] | None = None) -> int:
     related_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
     args = parser.parse_args(argv)
-    if args.command == "scan":
-        return _scan(args)
-    if args.command == "search":
-        return _search(args)
-    if args.command == "inspect":
-        return _inspect(args)
-    if args.command == "read":
-        return _read(args)
-    if args.command == "related":
-        return _related(args)
+    try:
+        if args.command == "scan":
+            return _scan(args)
+        if args.command == "search":
+            return _search(args)
+        if args.command == "inspect":
+            return _inspect(args)
+        if args.command == "read":
+            return _read(args)
+        if args.command == "related":
+            return _related(args)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     parser.error(f"Unknown command: {args.command}")
     return 2
 
@@ -110,6 +114,9 @@ def _search(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
     results = search_index(index_path, args.query, limit=args.limit)
+    if not results:
+        print("No results.")
+        return 0
     for position, result in enumerate(results, start=1):
         print(f"{position}. {result.path}")
         if result.snippet:
@@ -152,6 +159,9 @@ def _related(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
     results = related_paths(index_path, args.path, limit=args.limit)
+    if not results:
+        print("No related notes.")
+        return 0
     for position, result in enumerate(results, start=1):
         print(f"{position}. {result.path} ({result.score})")
         print(f"   {', '.join(result.reasons)}")
