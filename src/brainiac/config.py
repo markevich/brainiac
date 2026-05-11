@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from shutil import copyfile
+
+
+@dataclass(frozen=True)
+class VaultConfig:
+    name: str
+    root: Path | None
+    exclude: tuple[str, ...]
+    source_patterns: tuple[str, ...]
+    index_path: Path
+    generated_root: Path
+
+
+def load_vault_config(path: Path) -> VaultConfig:
+    """Load the small YAML subset used by config/vault.yml.
+
+    Brainiac intentionally has no runtime dependency yet. This parser supports
+    the current config shape: nested scalar keys and string lists.
+    """
+    if not path.exists():
+        _create_config_from_template(path)
+
+    current_section: str | None = None
+    values: dict[str, str] = {}
+    lists: dict[str, list[str]] = {}
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+
+        stripped = line.strip()
+        if not line.startswith(" ") and stripped.endswith(":"):
+            current_section = stripped[:-1]
+            lists.setdefault(current_section, [])
+            continue
+
+        if stripped.startswith("- "):
+            if current_section is None:
+                raise ValueError(f"List item outside a section in {path}: {raw_line}")
+            lists.setdefault(current_section, []).append(_unquote(stripped[2:].strip()))
+            continue
+
+        if ":" not in stripped:
+            continue
+
+        key, value = stripped.split(":", 1)
+        full_key = f"{current_section}.{key.strip()}" if current_section else key.strip()
+        values[full_key] = _unquote(value.strip())
+
+    project_root = path.parent.parent
+    vault_root_value = values.get("vault.root", "")
+    vault_root = Path(vault_root_value).expanduser() if vault_root_value else None
+
+    return VaultConfig(
+        name=values.get("vault.name", vault_root.name if vault_root else "Unknown vault"),
+        root=vault_root,
+        exclude=tuple(lists.get("exclude", [])),
+        source_patterns=tuple(lists.get("source_formats", [])),
+        index_path=_resolve_workspace_path(project_root, values["index.path"]),
+        generated_root=_resolve_workspace_path(project_root, values["generated_paths.root"]),
+    )
+
+
+def with_vault_overrides(
+    config: VaultConfig,
+    *,
+    root: Path | None = None,
+    exclude: tuple[str, ...] | None = None,
+) -> VaultConfig:
+    selected_root = root if root is not None else config.root
+    return VaultConfig(
+        name=selected_root.name if selected_root is not None else config.name,
+        root=selected_root,
+        exclude=exclude if exclude is not None else config.exclude,
+        source_patterns=config.source_patterns,
+        index_path=config.index_path,
+        generated_root=config.generated_root,
+    )
+
+
+def _resolve_workspace_path(project_root: Path, value: str) -> Path:
+    candidate = Path(value).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    return project_root / candidate
+
+
+def _unquote(value: str) -> str:
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1]
+    return value
+
+
+def _create_config_from_template(path: Path) -> None:
+    example_path = path.with_name("vault.example.yml")
+    if not example_path.exists():
+        raise FileNotFoundError(
+            f"Vault config not found: {path}. Template not found: {example_path}."
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    copyfile(example_path, path)

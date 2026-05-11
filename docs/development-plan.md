@@ -25,32 +25,53 @@ Exit criteria:
 
 Goal: understand an existing vault without changing it.
 
+Indexing model:
+
+- `scan` explicitly rebuilds the disposable SQLite index from source files.
+- Brainiac does not reindex automatically at the start of every agent/session.
+- Later retrieval commands read the existing index and should ask the user to run `scan` if it is missing or stale.
+
 Tasks:
 
-- [ ] Build a CLI command that scans a vault path.
-- [ ] Collect files, paths, sizes, mtimes, hashes, and empty-note status.
-- [ ] Extract Markdown headings.
-- [ ] Extract wikilinks and unresolved links.
-- [ ] Extract tags.
-- [ ] Extract Markdown tasks.
-- [ ] Write results to SQLite.
-- [ ] Generate a simple text or HTML inventory report.
+- [x] Build a CLI command that scans a vault path.
+- [x] Collect files, paths, sizes, mtimes, hashes, and empty-note status.
+- [x] Extract Markdown headings.
+- [x] Extract wikilinks and classify resolved, missing, and ambiguous links.
+- [x] Extract tags.
+- [x] Extract Markdown tasks.
+- [x] Write results to SQLite.
+- [x] Generate a simple text or HTML inventory report.
 
 Exit criteria:
 
 - Brainiac can answer "what is in this vault?" without reading all files into AI context.
 
+Current command:
+
+```bash
+PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/obsidian-vault
+```
+
 ## Phase 2: Bounded Search and Inspect
 
 Goal: give the AI useful retrieval tools before adding embeddings.
 
+Runtime requirement:
+
+- SQLite FTS5 support is required.
+- Brainiac should check FTS5 availability before creating/searching the index and exit with a clear setup error if unavailable.
+- Do not maintain a non-FTS fallback unless a real target environment requires it.
+
 Tasks:
 
+- [ ] Add an FTS5 runtime requirement check.
+- [ ] Add FTS5 tables for searchable Markdown content and metadata.
 - [ ] Implement lexical search over titles, headings, paths, tags, and text snippets.
 - [ ] Implement `inspect(path)` for metadata, headings, links, backlinks, tasks.
 - [ ] Implement `read(path, section?)`.
 - [ ] Implement `related(path)` using links, backlinks, folder proximity, tags, and lexical overlap.
 - [ ] Enforce result limits and snippet budgets.
+- [ ] Surface ambiguous links as warnings, with candidate paths and an Obsidian-compatible preferred path where possible.
 
 Exit criteria:
 
@@ -66,11 +87,15 @@ Tasks:
 - [ ] Implement `route(content)` returning candidate destinations and reasons.
 - [ ] Implement `find_duplicates(content)` using lexical similarity and metadata.
 - [ ] Add dry-run write suggestions.
+- [ ] Add note-name collision checks before any proposed create/write operation.
+- [ ] Define unique-title generation for Brainiac-created notes.
+- [ ] Generate links in a shortest-unique format so Brainiac-created links do not introduce ambiguity.
 - [ ] Add write log format.
 
 Exit criteria:
 
 - Given a new note or inbox item, Brainiac can suggest where it belongs and what existing notes may overlap.
+- Brainiac does not propose creating Markdown notes or links that introduce duplicate basename ambiguity.
 
 ## Phase 4: First Real Workflow
 

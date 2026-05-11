@@ -19,6 +19,7 @@ Rules:
 - Keep Brainiac generic.
 - Treat Jarvis as the default operator name, not as a dependency on any existing Jarvis project.
 - Do not import session flows, banners, or project-specific instructions from other Jarvis repositories.
+- Do not commit hardcoded user-specific absolute paths, personal usernames, private organization names, or local machine paths into tracked docs, logs, configs, tests, or source files. Use placeholders or generic descriptions instead.
 - Prefer CLI-first implementation before MCP, Obsidian plugin, or background daemon.
 - Treat indexes as disposable caches rebuildable from source files.
 - Start with structural and lexical retrieval before embeddings.
@@ -52,6 +53,14 @@ docs/
   development-plan.md
   operator-context.md
   source-takeaways.md
+src/brainiac/
+  cli.py
+  config.py
+  scanner.py
+  markdown.py
+  index.py
+  report.py
+tests/
 memory/
   synthesis/
   generated/

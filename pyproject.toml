@@ -1,0 +1,13 @@
+[project]
+name = "brainiac"
+version = "0.1.0"
+description = "AI-first local second-brain framework over plain files."
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+brainiac = "brainiac.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+config/vault.yml
+memory/index/*.sqlite
+memory/generated/reports/inventory.md

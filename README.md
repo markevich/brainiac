@@ -47,7 +47,13 @@ Those tools return compact candidates, snippets, paths, scores, and reasons. Ful
 
 ## Current Status
 
-This repository starts as a concept and planning skeleton. The first implementation milestone is a small local CLI indexer over one Obsidian-style vault.
+This repository now has the first read-only CLI inventory command over one Obsidian-style vault.
+
+```bash
+PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/obsidian-vault
+```
+
+`config/vault.yml` is local-only and ignored by git. On first run Brainiac creates it from `config/vault.example.yml`; set your local `vault.root` there or pass `--vault-root` for one-off scans. If `vault.root` is empty and the command is run interactively, Brainiac asks for the Obsidian vault path and optional folders to ignore. Extra ignores can also be passed with repeated `--exclude` flags. The command scans source formats from the vault config without mutating source files, writes a disposable SQLite index to `memory/index/brainiac.sqlite`, and writes an inventory report to `memory/generated/reports/inventory.md`.
 
 See:
 
