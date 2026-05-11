@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Iterable
 
@@ -91,15 +92,16 @@ CREATE INDEX idx_tasks_done ON tasks(done);
 
 def write_index(index_path: Path, result: ScanResult) -> None:
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         require_fts5(connection)
-        connection.executescript(SCHEMA)
-        connection.executemany(
-            "INSERT INTO scan_meta(key, value) VALUES (?, ?)",
-            sorted(result.meta.items()),
-        )
-        _insert_files(connection, result.files)
-        _insert_markdown(connection, result)
+        with connection:
+            connection.executescript(SCHEMA)
+            connection.executemany(
+                "INSERT INTO scan_meta(key, value) VALUES (?, ?)",
+                sorted(result.meta.items()),
+            )
+            _insert_files(connection, result.files)
+            _insert_markdown(connection, result)
 
 
 def require_fts5(connection: sqlite3.Connection) -> None:

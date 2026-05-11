@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import re
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,7 +50,7 @@ class RelatedResult:
 def inspect_path(index_path: Path, note_path: str) -> Inspection:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         file_row = connection.execute(
             """
             SELECT path, size_bytes, is_empty_note
@@ -130,7 +131,7 @@ def read_path(
 ) -> str:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         vault_root = _vault_root(connection)
         file_exists = connection.execute("SELECT 1 FROM files WHERE path = ?", (note_path,)).fetchone()
         if file_exists is None:
@@ -157,7 +158,7 @@ def read_path(
 def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple[RelatedResult, ...]:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         file_exists = connection.execute("SELECT 1 FROM files WHERE path = ?", (note_path,)).fetchone()
         if file_exists is None:
             raise FileNotFoundError(f"Path not found in index: {note_path}")

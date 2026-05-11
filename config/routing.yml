@@ -12,6 +12,7 @@ areas:
   travel: "2_Areas/Туризм/"
   taxes: "2_Areas/Налоги/"
   social: "2_Areas/Социализация.md"
+  work: "2_Areas/Work/"
   ai: "3_Resources/AI/"
   georgia: "3_Resources/Грузия/"
   books: "ibooks-highlights/"
@@ -28,6 +29,25 @@ queue:
 generated:
   root: "Brainiac/memory/generated/"
 
+disabled_destination_sections:
+  - "generated"
+
+important_terms:
+  - "3d"
+  - "ai"
+  - "dq"
+  - "ui"
+
+sensitive_destination_keys:
+  - "areas.health"
+  - "areas.family"
+  - "areas.taxes"
+
+sensitive_path_prefixes:
+  - "2_Areas/Здоровье/"
+  - "2_Areas/Семья/"
+  - "2_Areas/Налоги/"
+
 rules:
   - name: "Prefer updating existing canonical notes"
     description: "Before creating a new note, search for existing related notes and duplicates."
@@ -35,4 +55,3 @@ rules:
     description: "Book highlights and raw captures should remain as sources; synthesize into separate notes."
   - name: "Generated artifacts are not truth"
     description: "HTML reports and dashboards should be regenerated from source data."
-
