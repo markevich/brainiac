@@ -145,6 +145,11 @@ def _inspect(args: argparse.Namespace) -> int:
         if link.candidate_paths:
             print(f"    candidates: {', '.join(link.candidate_paths)}")
     print(f"Backlinks: {len(inspection.backlinks)}")
+    for link in inspection.backlinks[:20]:
+        suffix = f" -> {link.resolved_path}" if link.resolved_path else ""
+        if not suffix and link.preferred_path:
+            suffix = f" -> preferred {link.preferred_path}"
+        print(f"  {link.file_path}:L{link.line} {link.resolution_status}: [[{link.target}]]{suffix}")
     return 0
 
 

@@ -11,6 +11,7 @@ TOKEN_RE = re.compile(r"[\w/-]+", re.UNICODE)
 
 @dataclass(frozen=True)
 class LinkInfo:
+    file_path: str
     line: int
     target: str
     resolution_status: str
@@ -88,7 +89,7 @@ def inspect_path(index_path: Path, note_path: str) -> Inspection:
         outgoing_links = _link_rows(
             connection.execute(
                 """
-                SELECT line, target, resolution_status, resolved_path, preferred_path, candidate_paths
+                SELECT file_path, line, target, resolution_status, resolved_path, preferred_path, candidate_paths
                 FROM wikilinks
                 WHERE file_path = ?
                 ORDER BY line, target
@@ -99,12 +100,12 @@ def inspect_path(index_path: Path, note_path: str) -> Inspection:
         backlinks = _link_rows(
             connection.execute(
                 """
-                SELECT line, target, resolution_status, resolved_path, preferred_path, candidate_paths
+                SELECT file_path, line, target, resolution_status, resolved_path, preferred_path, candidate_paths
                 FROM wikilinks
-                WHERE resolved_path = ?
+                WHERE resolved_path = ? OR preferred_path = ?
                 ORDER BY file_path, line
                 """,
-                (note_path,),
+                (note_path, note_path),
             ).fetchall()
         )
 
@@ -184,8 +185,8 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
                 add(preferred_path, 60, "ambiguous link preferred candidate")
 
         for file_path in connection.execute(
-            "SELECT file_path FROM wikilinks WHERE resolved_path = ?",
-            (note_path,),
+            "SELECT file_path FROM wikilinks WHERE resolved_path = ? OR preferred_path = ?",
+            (note_path, note_path),
         ).fetchall():
             add(file_path[0], 90, "backlink")
 
@@ -255,6 +256,7 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
 def _link_rows(rows) -> tuple[LinkInfo, ...]:
     return tuple(
         LinkInfo(
+            file_path=file_path,
             line=int(line),
             target=target,
             resolution_status=resolution_status,
@@ -262,7 +264,7 @@ def _link_rows(rows) -> tuple[LinkInfo, ...]:
             preferred_path=preferred_path,
             candidate_paths=tuple(candidate_paths.splitlines()) if candidate_paths else (),
         )
-        for line, target, resolution_status, resolved_path, preferred_path, candidate_paths in rows
+        for file_path, line, target, resolution_status, resolved_path, preferred_path, candidate_paths in rows
     )
 
 

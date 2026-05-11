@@ -54,6 +54,8 @@ Other text.
             self.assertEqual(inspection.tags, ("#topic",))
             self.assertEqual(inspection.tasks[0].text, "follow up")
             self.assertEqual(inspection.outgoing_links[0].resolved_path, "Target.md")
+            target_inspection = inspect_path(config.index_path, "Target.md")
+            self.assertEqual(target_inspection.backlinks[0].file_path, "Source.md")
             self.assertIn("Important section text.", section)
             self.assertNotIn("Other text.", section)
             self.assertTrue(truncated.endswith("...[truncated]"))
@@ -87,6 +89,8 @@ Other text.
             self.assertEqual(inspection.outgoing_links[0].resolution_status, "ambiguous")
             self.assertEqual(inspection.outgoing_links[0].preferred_path, "A/Duplicate.md")
             self.assertEqual(inspection.outgoing_links[0].candidate_paths, ("A/Duplicate.md", "B/Duplicate.md"))
+            target_inspection = inspect_path(config.index_path, "A/Duplicate.md")
+            self.assertEqual(target_inspection.backlinks[0].file_path, "A/Source.md")
             self.assertEqual(related[0].path, "A/Duplicate.md")
             self.assertIn("ambiguous link preferred candidate", related[0].reasons)
 
