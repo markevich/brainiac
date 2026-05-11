@@ -51,7 +51,17 @@ This repository starts as a concept and planning skeleton. The first implementat
 
 See:
 
+- [AGENTS.md](AGENTS.md)
+- [docs/context-brief.md](docs/context-brief.md)
 - [docs/concept.md](docs/concept.md)
 - [docs/development-plan.md](docs/development-plan.md)
+- [docs/source-takeaways.md](docs/source-takeaways.md)
+- [docs/operator-context.md](docs/operator-context.md)
 - [operator.md](operator.md)
 
+## Two Contexts
+
+Brainiac has two distinct operating contexts:
+
+- `Development context`: build Brainiac itself. Read `AGENTS.md`, `README.md`, `docs/context-brief.md`, `docs/concept.md`, and `docs/development-plan.md`.
+- `Operator context`: use Brainiac with a vault. Read `operator.md`, `docs/operator-context.md`, and the files in `config/`.

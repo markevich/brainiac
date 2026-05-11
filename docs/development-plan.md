@@ -12,8 +12,10 @@ Tasks:
 - [x] Write core concept.
 - [x] Write operator contract.
 - [x] Define initial vault, routing, and policy configs.
-- [ ] Add initial operation log.
-- [ ] Add notes from early design discussion if needed.
+- [x] Add initial operation log.
+- [x] Add notes from early design discussion.
+- [x] Add Codex/agent entrypoint.
+- [x] Split development context from operator context.
 
 Exit criteria:
 
@@ -158,4 +160,3 @@ Tasks:
 Exit criteria:
 
 - Brainiac can preserve conclusions over time instead of making the AI re-synthesize everything on each query.
-
