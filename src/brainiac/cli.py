@@ -8,6 +8,7 @@ from .config import load_vault_config, with_vault_overrides
 from .index import write_index
 from .report import write_inventory_report
 from .retrieval import inspect_path, read_path, related_paths
+from .routing import find_duplicates, route_content
 from .scanner import scan_vault
 from .search import search_index
 
@@ -54,6 +55,27 @@ def main(argv: list[str] | None = None) -> int:
     related_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     related_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
+    route_parser = subparsers.add_parser("route", help="Dry-run route new content into the vault.")
+    route_parser.add_argument("content", nargs="?", help="Content to route. Use --file for longer input.")
+    route_parser.add_argument("--file", type=Path, help="Read content to route from a file.")
+    route_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    route_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    route_parser.add_argument("--limit", type=int, default=5, help="Maximum number of route candidates.")
+
+    duplicates_parser = subparsers.add_parser(
+        "find-duplicates",
+        help="Find existing notes that overlap with new content.",
+    )
+    duplicates_parser.add_argument("content", nargs="?", help="Content to compare. Use --file for longer input.")
+    duplicates_parser.add_argument("--file", type=Path, help="Read content to compare from a file.")
+    duplicates_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    duplicates_parser.add_argument("--limit", type=int, default=5, help="Maximum number of results.")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "scan":
@@ -66,6 +88,10 @@ def main(argv: list[str] | None = None) -> int:
             return _read(args)
         if args.command == "related":
             return _related(args)
+        if args.command == "route":
+            return _route(args)
+        if args.command == "find-duplicates":
+            return _find_duplicates(args)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -171,3 +197,62 @@ def _related(args: argparse.Namespace) -> int:
         print(f"{position}. {result.path} ({result.score})")
         print(f"   {', '.join(result.reasons)}")
     return 0
+
+
+def _route(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    result = route_content(
+        index_path,
+        args.routing_config,
+        _content_arg(args.content, args.file),
+        limit=args.limit,
+    )
+    print(f"Title: {result.title}")
+    print(f"Confidence: {result.confidence}")
+    print(f"Recommendation: {result.recommendation}")
+    print("Route candidates:")
+    if not result.candidates:
+        print("  No route candidates.")
+    for position, candidate in enumerate(result.candidates, start=1):
+        suggestion = candidate.suggestion
+        print(
+            f"{position}. {candidate.destination.section}.{candidate.destination.key} "
+            f"-> {candidate.destination.path} ({candidate.score})"
+        )
+        print(f"   reasons: {', '.join(candidate.reasons)}")
+        print(f"   dry-run: {suggestion.action} {suggestion.path}")
+        print(f"   link: {suggestion.link}")
+        if suggestion.policy == "review_required":
+            print("   policy: review_required before any write")
+
+    print("Duplicate candidates:")
+    if not result.duplicates:
+        print("  No likely duplicates.")
+    for position, duplicate in enumerate(result.duplicates, start=1):
+        print(f"{position}. {duplicate.path} ({duplicate.score})")
+        print(f"   {', '.join(duplicate.reasons)}")
+    return 0
+
+
+def _find_duplicates(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    results = find_duplicates(index_path, _content_arg(args.content, args.file), limit=args.limit)
+    if not results:
+        print("No likely duplicates.")
+        return 0
+    for position, result in enumerate(results, start=1):
+        print(f"{position}. {result.path} ({result.score})")
+        print(f"   {', '.join(result.reasons)}")
+    return 0
+
+
+def _content_arg(content: str | None, file_path: Path | None) -> str:
+    if file_path is not None:
+        return file_path.read_text(encoding="utf-8", errors="replace")
+    if content:
+        return content
+    if not sys.stdin.isatty():
+        return sys.stdin.read()
+    raise ValueError("Pass content as an argument, with --file, or through stdin.")

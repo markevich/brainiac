@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -25,7 +26,7 @@ def search_index(index_path: Path, query: str, *, limit: int = 10) -> tuple[Sear
     if not match_query:
         return ()
 
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         require_fts5(connection)
         rows = connection.execute(
             """

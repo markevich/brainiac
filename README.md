@@ -55,12 +55,26 @@ PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/obsidian-vault
 
 `config/vault.yml` is local-only and ignored by git. On first run Brainiac creates it from `config/vault.example.yml`; set your local `vault.root` there or pass `--vault-root` for one-off scans. If `vault.root` is empty and the command is run interactively, Brainiac asks for the Obsidian vault path and optional folders to ignore. Extra ignores can also be passed with repeated `--exclude` flags. The command scans source formats from the vault config without mutating source files, writes a disposable SQLite index to `memory/index/brainiac.sqlite`, and writes an inventory report to `memory/generated/reports/inventory.md`.
 
+The read-only retrieval and routing commands use the existing index:
+
+```bash
+PYTHONPATH=src python3 -m brainiac search "query"
+PYTHONPATH=src python3 -m brainiac inspect path/to/note.md
+PYTHONPATH=src python3 -m brainiac read path/to/note.md --section "Heading"
+PYTHONPATH=src python3 -m brainiac related path/to/note.md
+PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
+```
+
+`route` and `find-duplicates` are dry-run helpers. They suggest destinations, likely overlaps, and safe note/link names, but they do not write to the vault.
+
 See:
 
 - [AGENTS.md](AGENTS.md)
 - [docs/context-brief.md](docs/context-brief.md)
 - [docs/concept.md](docs/concept.md)
 - [docs/development-plan.md](docs/development-plan.md)
+- [docs/write-log-format.md](docs/write-log-format.md)
 - [docs/source-takeaways.md](docs/source-takeaways.md)
 - [docs/operator-context.md](docs/operator-context.md)
 - [operator.md](operator.md)

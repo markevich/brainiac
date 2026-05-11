@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 
 def write_inventory_report(index_path: Path, report_path: Path) -> None:
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         summary = _summary(connection)
         extensions = connection.execute(
             """

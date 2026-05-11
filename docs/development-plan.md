@@ -111,21 +111,126 @@ Goal: help place new information into the vault.
 
 Tasks:
 
-- [ ] Define routing rules in `config/routing.yml`.
-- [ ] Implement `route(content)` returning candidate destinations and reasons.
-- [ ] Implement `find_duplicates(content)` using lexical similarity and metadata.
-- [ ] Add dry-run write suggestions.
-- [ ] Add note-name collision checks before any proposed create/write operation.
-- [ ] Define unique-title generation for Brainiac-created notes.
-- [ ] Generate links in a shortest-unique format so Brainiac-created links do not introduce ambiguity.
-- [ ] Add write log format.
+- [x] Define routing rules in `config/routing.yml`.
+- [x] Implement `route(content)` returning candidate destinations and reasons.
+- [x] Implement `find_duplicates(content)` using lexical similarity and metadata.
+- [x] Add dry-run write suggestions.
+- [x] Add note-name collision checks before any proposed create/write operation.
+- [x] Define unique-title generation for Brainiac-created notes.
+- [x] Generate links in a shortest-unique format so Brainiac-created links do not introduce ambiguity.
+- [x] Add write log format.
 
 Exit criteria:
 
 - Given a new note or inbox item, Brainiac can suggest where it belongs and what existing notes may overlap.
 - Brainiac does not propose creating Markdown notes or links that introduce duplicate basename ambiguity.
 
-## Phase 4: First Real Workflow
+Implemented commands:
+
+```bash
+PYTHONPATH=src python3 -m brainiac route "# New note..."
+PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac find-duplicates "# New note..."
+PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
+```
+
+Implementation notes:
+
+- `route` reads the existing index and `config/routing.yml`; it does not rescan or write to the vault.
+- Route candidates include destination scores, reasons, duplicate candidates, and a dry-run suggestion to create, update, or review an existing note.
+- Folder destinations generate a unique Markdown filename from the proposed title.
+- Existing same-title notes or basename collisions turn the suggestion into `review` instead of blindly proposing a new file.
+- Suggested wikilinks use the shortest unique Obsidian-compatible form: `[[Title]]` when the basename is unambiguous, otherwise `[[folder/Title]]`.
+- Duplicate detection is lexical and metadata-based. It intentionally avoids embeddings for this phase.
+- Sensitive destinations and short domain tokens are configured in `config/routing.yml`, not hardcoded in source.
+- Disabled destination sections, such as generated artifacts, are configured in `config/routing.yml` and excluded from source-note routing.
+- Low-confidence routes are explicitly marked as inbox/new-area candidates instead of pretending an existing area is a good fit.
+- Write operations are not implemented yet, but their append-only JSONL audit format is defined in `docs/write-log-format.md`.
+
+## Phase 4: Vault Structure Model
+
+Goal: define a generic vault taxonomy that makes routing, retrieval, and safe writes work across different people and vaults.
+
+Research candidates:
+
+- PARA: Projects, Areas, Resources, Archives;
+- Johnny Decimal;
+- Zettelkasten-style permanent/literature/fleeting notes;
+- domain-first vaults;
+- hybrid models with inbox, active work, durable areas, resources, generated artifacts, and archive.
+
+Tasks:
+
+- [ ] Study how PARA and alternatives map to Brainiac use cases.
+- [ ] Define Brainiac's recommended generic vault shape without requiring users to adopt it exactly.
+- [ ] Separate universal roles from user-specific paths: inbox, projects, areas, resources, archive, generated, synthesis, queue.
+- [ ] Add routing config schema for roles, aliases, sensitive domains, important short tokens, and domain-specific hints.
+- [ ] Define a high-level vault map index over roles, areas, projects, resources, and synthesis roots.
+- [ ] Generate compact area/project profiles from existing notes: title, path, role, tags, top terms, representative notes, recent activity, sensitive flag, and short human-readable summary.
+- [ ] Use the vault map as the first routing layer: rank candidate areas/projects by profile before selecting a destination note.
+- [ ] Treat manual hints as optional local overrides, not as the primary multilingual routing strategy.
+- [ ] Support empty or sparse vaults with generic role templates and "candidate new area" suggestions.
+- [ ] Add a command or report that diagnoses a vault's structure against the recommended model.
+- [ ] Document migration-safe recommendations: suggest, do not move files automatically.
+- [ ] Revisit Phase 3 scoring once role metadata exists, so routing is not over-dependent on folder names.
+
+Exit criteria:
+
+- Brainiac can explain what role each configured vault path plays.
+- Routing rules can be portable across vaults by role, while local paths remain config-only.
+- No source code contains user-specific vault path assumptions.
+- Routing decisions can be made from compact area/project profiles instead of hardcoded multilingual keyword dictionaries.
+
+## Phase 5: Synthesis Primitives
+
+Goal: make persistent understanding a first-class retrieval object, not a late-stage reporting feature.
+
+Why this phase exists:
+
+- Search answers "what raw context is relevant right now?"
+- Synthesis answers "what have we already concluded about this topic over time?"
+- Without synthesis, Brainiac repeats RAG behavior: retrieve raw notes, reason once, then forget the reasoning.
+- With synthesis, Jarvis can read compact current understanding first, then inspect raw sources only for gaps, details, or verification.
+
+Core model:
+
+```text
+raw notes/highlights/captures = evidence
+synthesis notes = current understanding
+index = retrieval mechanism
+Jarvis = operator that uses all three
+```
+
+Retrieval behavior:
+
+- Synthesis notes should be indexed and searchable like normal Markdown.
+- Topic-matching synthesis notes should be boosted above raw source notes in search/related results.
+- `inspect` should show whether a source note is referenced by synthesis notes.
+- `related` should include synthesis notes that cite or summarize the current note.
+- Jarvis should read a relevant synthesis note first, then use raw sources for verification or details.
+
+Tasks:
+
+- [ ] Define synthesis note format: current stance, key points, decisions, open questions, contradictions, sources, last reviewed.
+- [ ] Define frontmatter or metadata convention for synthesis notes.
+- [ ] Add synthesis roots to config and index them as a distinct role/type.
+- [ ] Track source references from synthesis notes to raw notes.
+- [ ] Track source hash/mtime snapshots used by each synthesis note.
+- [ ] Implement `synthesis list`.
+- [ ] Implement `synthesis inspect <topic-or-path>`.
+- [ ] Implement `synthesis stale` to detect synthesis notes whose sources changed.
+- [ ] Implement `synthesis suggest <topic-or-path>` as dry-run only.
+- [ ] Make `search` and `related` surface relevant synthesis notes before raw sources when appropriate.
+- [ ] Add review-before-apply policy for synthesis writes.
+- [ ] Document that synthesis is derived memory, not raw evidence.
+
+Exit criteria:
+
+- Brainiac can preserve conclusions over time instead of making Jarvis re-synthesize everything on each query.
+- Jarvis can use a synthesis note as the first context layer for a topic.
+- Brainiac can explain which raw sources support a synthesis note and whether that synthesis may be stale.
+
+## Phase 6: First Real Workflow
 
 Goal: prove usefulness on one low-risk domain.
 
@@ -149,7 +254,7 @@ Exit criteria:
 
 - Brainiac produces a result the user would actually reuse.
 
-## Phase 5: Optional Semantic Search
+## Phase 7: Optional Semantic Search
 
 Goal: add embeddings only after structural/lexical retrieval proves useful.
 
@@ -166,7 +271,7 @@ Exit criteria:
 
 - Semantic search improves retrieval quality enough to justify the added complexity.
 
-## Phase 6: MCP or Local Service
+## Phase 8: MCP or Local Service
 
 Goal: expose Brainiac as a proper AI tool backend.
 
@@ -182,7 +287,7 @@ Exit criteria:
 
 - Jarvis can use Brainiac as a tool provider.
 
-## Phase 7: Obsidian Integration
+## Phase 9: Obsidian Integration
 
 Goal: make Brainiac convenient inside Obsidian without depending on Obsidian as the backend.
 
@@ -198,18 +303,23 @@ Exit criteria:
 
 - Brainiac improves the Obsidian experience without becoming an Obsidian-only system.
 
-## Phase 8: Synthesis and Maintenance
+## Phase 10: Maintenance Automation
 
-Goal: move beyond search into persistent understanding.
+Goal: automate upkeep only after synthesis, retrieval, routing, and safe writes are proven manually.
+
+Maintenance should build on Phase 5 synthesis primitives instead of introducing a separate understanding layer.
 
 Tasks:
 
-- [ ] Define synthesis note format.
-- [ ] Implement "suggest synthesis update" as dry-run.
-- [ ] Track raw sources referenced by synthesis notes.
-- [ ] Detect contradictions or stale summaries.
-- [ ] Add review-before-apply policy for important synthesis.
+- [ ] Add scheduled or explicit maintenance reports for stale synthesis notes.
+- [ ] Detect contradictions between synthesis notes and changed raw sources.
+- [ ] Detect orphan/generated artifacts that are stale or unsupported by current sources.
+- [ ] Detect notes that should probably update an existing synthesis note.
+- [ ] Detect areas/projects with many raw captures but no synthesis note.
+- [ ] Add dry-run maintenance plans with explicit source references.
+- [ ] Add policy gates for applying maintenance changes.
+- [ ] Add optional notification/report output, but avoid daily briefing spam.
 
 Exit criteria:
 
-- Brainiac can preserve conclusions over time instead of making the AI re-synthesize everything on each query.
+- Brainiac can keep synthesis and generated outputs fresh without silently rewriting source-of-truth notes.
