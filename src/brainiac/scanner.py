@@ -28,8 +28,10 @@ class FileRecord:
 class ScanResult:
     files: tuple[FileRecord, ...]
     markdown: dict[str, MarkdownFacts]
+    markdown_text: dict[str, str]
     resolved_wikilinks: dict[tuple[str, int, str], str]
     ambiguous_wikilinks: dict[tuple[str, int, str], tuple[str, ...]]
+    preferred_wikilinks: dict[tuple[str, int, str], str]
     meta: dict[str, str]
 
 
@@ -44,6 +46,7 @@ def scan_vault(config: VaultConfig) -> ScanResult:
 
     records: list[FileRecord] = []
     markdown: dict[str, MarkdownFacts] = {}
+    markdown_text: dict[str, str] = {}
     page_index: dict[str, str] = {}
     stem_index: dict[str, set[str]] = {}
 
@@ -58,6 +61,7 @@ def scan_vault(config: VaultConfig) -> ScanResult:
         if is_markdown:
             text = path.read_text(encoding="utf-8", errors="replace")
             is_empty_note = len(text.strip()) == 0
+            markdown_text[relative_path] = text
             markdown[relative_path] = extract_markdown_facts(text)
             page_index[Path(relative_path).with_suffix("").as_posix().lower()] = relative_path
             stem_index.setdefault(Path(relative_path).stem.lower(), set()).add(relative_path)
@@ -74,12 +78,18 @@ def scan_vault(config: VaultConfig) -> ScanResult:
             )
         )
 
-    resolved_wikilinks, ambiguous_wikilinks = _resolve_wikilinks(markdown, page_index, stem_index)
+    resolved_wikilinks, ambiguous_wikilinks, preferred_wikilinks = _resolve_wikilinks(
+        markdown,
+        page_index,
+        stem_index,
+    )
     return ScanResult(
         files=tuple(records),
         markdown=markdown,
+        markdown_text=markdown_text,
         resolved_wikilinks=resolved_wikilinks,
         ambiguous_wikilinks=ambiguous_wikilinks,
+        preferred_wikilinks=preferred_wikilinks,
         meta={
             "vault_name": config.name,
             "vault_root": vault_root.as_posix(),
@@ -129,9 +139,14 @@ def _resolve_wikilinks(
     markdown: dict[str, MarkdownFacts],
     page_index: dict[str, str],
     stem_index: dict[str, set[str]],
-) -> tuple[dict[tuple[str, int, str], str], dict[tuple[str, int, str], tuple[str, ...]]]:
+) -> tuple[
+    dict[tuple[str, int, str], str],
+    dict[tuple[str, int, str], tuple[str, ...]],
+    dict[tuple[str, int, str], str],
+]:
     resolved: dict[tuple[str, int, str], str] = {}
     ambiguous: dict[tuple[str, int, str], tuple[str, ...]] = {}
+    preferred: dict[tuple[str, int, str], str] = {}
     for file_path, facts in markdown.items():
         for link in facts.wikilinks:
             if not link.target:
@@ -144,7 +159,25 @@ def _resolve_wikilinks(
                 if len(stem_matches) == 1:
                     match = next(iter(stem_matches))
                 elif len(stem_matches) > 1:
-                    ambiguous[key] = tuple(sorted(stem_matches))
+                    candidates = tuple(sorted(stem_matches))
+                    ambiguous[key] = candidates
+                    preferred[key] = _preferred_candidate(file_path, candidates)
             if match is not None:
                 resolved[key] = match
-    return resolved, ambiguous
+    return resolved, ambiguous, preferred
+
+
+def _preferred_candidate(source_path: str, candidates: tuple[str, ...]) -> str:
+    source_parts = Path(source_path).parts
+
+    def score(candidate: str) -> tuple[int, int, str]:
+        candidate_parts = Path(candidate).parts
+        common_prefix = 0
+        for source_part, candidate_part in zip(source_parts, candidate_parts):
+            if source_part != candidate_part:
+                break
+            common_prefix += 1
+        same_top_folder = int(bool(source_parts and candidate_parts and source_parts[0] == candidate_parts[0]))
+        return (-common_prefix, -same_top_folder, candidate)
+
+    return min(candidates, key=score)

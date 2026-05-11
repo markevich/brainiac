@@ -7,7 +7,9 @@ from pathlib import Path
 from .config import load_vault_config, with_vault_overrides
 from .index import write_index
 from .report import write_inventory_report
+from .retrieval import inspect_path, read_path, related_paths
 from .scanner import scan_vault
+from .search import search_index
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,9 +34,41 @@ def main(argv: list[str] | None = None) -> int:
         help="Additional vault-relative folder or file path to ignore. Can be used more than once.",
     )
 
+    search_parser = subparsers.add_parser("search", help="Search the existing vault index.")
+    search_parser.add_argument("query", help="Search query.")
+    search_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    search_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
+
+    inspect_parser = subparsers.add_parser("inspect", help="Inspect one indexed vault path.")
+    inspect_parser.add_argument("path", help="Vault-relative path to inspect.")
+    inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+
+    read_parser = subparsers.add_parser("read", help="Read one indexed vault path.")
+    read_parser.add_argument("path", help="Vault-relative path to read.")
+    read_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    read_parser.add_argument("--section", help="Read only one Markdown section by heading text.")
+    read_parser.add_argument("--max-chars", type=int, default=6000, help="Maximum characters to print.")
+
+    related_parser = subparsers.add_parser("related", help="Find notes related to one indexed path.")
+    related_parser.add_argument("path", help="Vault-relative path.")
+    related_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    related_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
+
     args = parser.parse_args(argv)
-    if args.command == "scan":
-        return _scan(args)
+    try:
+        if args.command == "scan":
+            return _scan(args)
+        if args.command == "search":
+            return _search(args)
+        if args.command == "inspect":
+            return _inspect(args)
+        if args.command == "read":
+            return _read(args)
+        if args.command == "related":
+            return _related(args)
+    except (FileNotFoundError, RuntimeError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     parser.error(f"Unknown command: {args.command}")
     return 2
 
@@ -74,3 +108,66 @@ def _resolve_vault_config(config, vault_root_arg: Path | None, excludes: tuple[s
 def _normalize_exclude(value: str) -> str:
     normalized = value.strip().strip("/")
     return normalized + "/" if normalized else normalized
+
+
+def _search(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    results = search_index(index_path, args.query, limit=args.limit)
+    if not results:
+        print("No results.")
+        return 0
+    for position, result in enumerate(results, start=1):
+        print(f"{position}. {result.path}")
+        if result.snippet:
+            print(f"   {result.snippet}")
+    return 0
+
+
+def _inspect(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    inspection = inspect_path(index_path, args.path)
+    print(f"Path: {inspection.path}")
+    print(f"Size: {inspection.size_bytes} bytes")
+    print(f"Empty note: {inspection.is_empty_note}")
+    print(f"Headings: {len(inspection.headings)}")
+    for line, level, text in inspection.headings[:20]:
+        print(f"  L{line} H{level} {text}")
+    print(f"Tags: {', '.join(inspection.tags) if inspection.tags else '-'}")
+    print(f"Tasks: {len(inspection.tasks)}")
+    print(f"Outgoing links: {len(inspection.outgoing_links)}")
+    for link in inspection.outgoing_links:
+        suffix = f" -> {link.resolved_path}" if link.resolved_path else ""
+        if not suffix and link.preferred_path:
+            suffix = f" -> preferred {link.preferred_path}"
+        print(f"  L{link.line} {link.resolution_status}: [[{link.target}]]{suffix}")
+        if link.candidate_paths:
+            print(f"    candidates: {', '.join(link.candidate_paths)}")
+    print(f"Backlinks: {len(inspection.backlinks)}")
+    for link in inspection.backlinks[:20]:
+        suffix = f" -> {link.resolved_path}" if link.resolved_path else ""
+        if not suffix and link.preferred_path:
+            suffix = f" -> preferred {link.preferred_path}"
+        print(f"  {link.file_path}:L{link.line} {link.resolution_status}: [[{link.target}]]{suffix}")
+    return 0
+
+
+def _read(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    print(read_path(index_path, args.path, section=args.section, max_chars=args.max_chars))
+    return 0
+
+
+def _related(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    results = related_paths(index_path, args.path, limit=args.limit)
+    if not results:
+        print("No related notes.")
+        return 0
+    for position, result in enumerate(results, start=1):
+        print(f"{position}. {result.path} ({result.score})")
+        print(f"   {', '.join(result.reasons)}")
+    return 0
