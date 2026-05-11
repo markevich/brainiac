@@ -65,6 +65,10 @@ class ScanTest(unittest.TestCase):
                     ],
                     1,
                 )
+                self.assertEqual(
+                    connection.execute("SELECT COUNT(*) FROM search_index").fetchone()[0],
+                    2,
+                )
 
             report = report_path.read_text(encoding="utf-8")
             self.assertIn("Brainiac Inventory Report", report)
@@ -96,7 +100,7 @@ class ScanTest(unittest.TestCase):
             with sqlite3.connect(config.index_path) as connection:
                 rows = connection.execute(
                     """
-                    SELECT target, resolved_path, is_resolved, resolution_status, candidate_paths
+                    SELECT target, resolved_path, preferred_path, is_resolved, resolution_status, candidate_paths
                     FROM wikilinks
                     ORDER BY target
                     """
@@ -105,8 +109,8 @@ class ScanTest(unittest.TestCase):
             self.assertEqual(
                 rows,
                 [
-                    ("A/Duplicate", "A/Duplicate.md", 1, "resolved", None),
-                    ("Duplicate", None, 0, "ambiguous", "A/Duplicate.md\nB/Duplicate.md"),
+                    ("A/Duplicate", "A/Duplicate.md", None, 1, "resolved", None),
+                    ("Duplicate", None, "A/Duplicate.md", 0, "ambiguous", "A/Duplicate.md\nB/Duplicate.md"),
                 ],
             )
 

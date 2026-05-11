@@ -35,7 +35,7 @@ def write_inventory_report(index_path: Path, report_path: Path) -> None:
         ).fetchall()
         ambiguous = connection.execute(
             """
-            SELECT file_path, line, target, candidate_paths FROM wikilinks
+            SELECT file_path, line, target, preferred_path, candidate_paths FROM wikilinks
             WHERE resolution_status = 'ambiguous'
             ORDER BY file_path, line
             LIMIT 100
@@ -115,9 +115,12 @@ def _render_report(
         lines.append("No missing wikilinks found.")
     lines.extend(["", "## Ambiguous Wikilinks", ""])
     if ambiguous:
-        for path, line, target, candidate_paths in ambiguous:
+        for path, line, target, preferred_path, candidate_paths in ambiguous:
             candidates = ", ".join(f"`{candidate}`" for candidate in candidate_paths.splitlines())
-            lines.append(f"- `{path}:{line}` -> `[[{target}]]` candidates: {candidates}")
+            lines.append(
+                f"- `{path}:{line}` -> `[[{target}]]` preferred: `{preferred_path}`; "
+                f"candidates: {candidates}"
+            )
     else:
         lines.append("No ambiguous wikilinks found.")
     lines.extend(["", "## Open Tasks", ""])

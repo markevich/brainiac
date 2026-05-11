@@ -64,14 +64,14 @@ Runtime requirement:
 
 Tasks:
 
-- [ ] Add an FTS5 runtime requirement check.
-- [ ] Add FTS5 tables for searchable Markdown content and metadata.
-- [ ] Implement lexical search over titles, headings, paths, tags, and text snippets.
-- [ ] Implement `inspect(path)` for metadata, headings, links, backlinks, tasks.
-- [ ] Implement `read(path, section?)`.
-- [ ] Implement `related(path)` using links, backlinks, folder proximity, tags, and lexical overlap.
-- [ ] Enforce result limits and snippet budgets.
-- [ ] Surface ambiguous links as warnings, with candidate paths and an Obsidian-compatible preferred path where possible.
+- [x] Add an FTS5 runtime requirement check.
+- [x] Add FTS5 tables for searchable Markdown content and metadata.
+- [x] Implement lexical search over titles, headings, paths, tags, and text snippets.
+- [x] Implement `inspect(path)` for metadata, headings, links, backlinks, tasks.
+- [x] Implement `read(path, section?)`.
+- [x] Implement `related(path)` using links, backlinks, folder proximity, tags, and lexical overlap.
+- [x] Enforce result limits and snippet budgets.
+- [x] Surface ambiguous links as warnings, with candidate paths and an Obsidian-compatible preferred path where possible.
 
 Exit criteria:
 
