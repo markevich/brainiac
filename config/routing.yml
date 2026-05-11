@@ -1,0 +1,38 @@
+# Brainiac routing rules
+
+inbox:
+  default: "0_Inbox/"
+  personal: "0_Inbox/личное.md"
+  work: "0_Inbox/work.md"
+
+areas:
+  food: "2_Areas/Еда/"
+  health: "2_Areas/Здоровье/"
+  family: "2_Areas/Семья/"
+  travel: "2_Areas/Туризм/"
+  taxes: "2_Areas/Налоги/"
+  social: "2_Areas/Социализация.md"
+  ai: "3_Resources/AI/"
+  georgia: "3_Resources/Грузия/"
+  books: "ibooks-highlights/"
+
+projects:
+  root: "1_Projects/"
+
+synthesis:
+  root: "Brainiac/memory/synthesis/"
+
+queue:
+  root: "Brainiac/memory/queue/"
+
+generated:
+  root: "Brainiac/memory/generated/"
+
+rules:
+  - name: "Prefer updating existing canonical notes"
+    description: "Before creating a new note, search for existing related notes and duplicates."
+  - name: "Keep raw imports separate"
+    description: "Book highlights and raw captures should remain as sources; synthesize into separate notes."
+  - name: "Generated artifacts are not truth"
+    description: "HTML reports and dashboards should be regenerated from source data."
+

@@ -1,0 +1,35 @@
+# Brainiac vault configuration
+
+vault:
+  name: "Second brain"
+  root: "/Users/slava.markevich/Library/Mobile Documents/iCloud~md~obsidian/Documents/Second brain"
+
+exclude:
+  - "Softswiss/"
+  - ".obsidian/"
+  - ".trash/"
+  - "Brainiac/memory/index/"
+
+source_formats:
+  markdown:
+    - "*.md"
+  canvas:
+    - "*.canvas"
+  structured:
+    - "*.json"
+    - "*.yml"
+    - "*.yaml"
+    - "*.csv"
+    - "*.sqlite"
+    - "*.db"
+
+generated_paths:
+  root: "Brainiac/memory/generated/"
+  dashboards: "Brainiac/memory/generated/dashboards/"
+  reports: "Brainiac/memory/generated/reports/"
+  artifacts: "Brainiac/memory/generated/artifacts/"
+
+index:
+  path: "Brainiac/memory/index/brainiac.sqlite"
+  disposable: true
+
