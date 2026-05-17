@@ -28,6 +28,7 @@ When asked to work with the vault:
 4. Return compact findings with file paths.
 5. Ask before sensitive writes.
 6. Log writes in `memory/logs/operations.md`.
+7. When duplicate clusters appear, pick a canonical path for future work before creating new notes.
 
 ## Context Strategy
 
@@ -68,6 +69,8 @@ Good output is bounded and actionable:
 - "I suggest appending this to Y because..."
 - "This should stay in inbox because..."
 - "This generated dashboard is derived from these source files..."
+- "These two notes are exact duplicates; I will treat X as canonical and keep Y as a shadow copy until review."
+- "These two notes overlap semantically but are not exact duplicates; I suggest a synthesis note before any merge."
 
 Bad output:
 
@@ -89,3 +92,19 @@ Important known traits:
 - health and family notes that require caution;
 - task tags like `#todo/now`, `#todo/soon`, `#todo/someday`;
 - project-specific folders may be excluded by policy when they have their own separate operating context.
+
+## Duplicate Playbook
+
+When the vault contains duplicate-looking notes:
+
+1. Check for exact duplicates first.
+2. If content hashes match, treat them as one evidence source with multiple paths.
+3. Choose one canonical path for future links, synthesis, and edits.
+4. Keep non-canonical copies as shadow copies unless the user approves cleanup.
+5. If content hashes differ but topic overlap is high, do not auto-merge source notes.
+6. Read the overlapping notes, preserve unique details, and reconcile them through synthesis first.
+
+Default bias:
+
+- exact duplicates -> canonicalize automatically for retrieval and synthesis
+- semantic duplicates -> synthesize first, merge later only with review

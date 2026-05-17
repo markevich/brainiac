@@ -46,6 +46,7 @@ class MarkdownFacts:
     wikilinks: tuple[WikiLink, ...]
     tags: tuple[Tag, ...]
     tasks: tuple[Task, ...]
+    frontmatter: dict[str, tuple[str, ...]]
 
 
 def extract_markdown_facts(text: str) -> MarkdownFacts:
@@ -53,9 +54,11 @@ def extract_markdown_facts(text: str) -> MarkdownFacts:
     wikilinks: list[WikiLink] = []
     tags: list[Tag] = []
     tasks: list[Task] = []
+    frontmatter: dict[str, list[str]] = {}
     fence_marker: str | None = None
     in_frontmatter = False
     in_frontmatter_tags_list = False
+    frontmatter_list_key: str | None = None
 
     for line_number, line in enumerate(text.splitlines(), start=1):
         if line_number == 1 and FRONTMATTER_DELIMITER_RE.match(line):
@@ -65,7 +68,9 @@ def extract_markdown_facts(text: str) -> MarkdownFacts:
             if FRONTMATTER_DELIMITER_RE.match(line):
                 in_frontmatter = False
                 in_frontmatter_tags_list = False
+                frontmatter_list_key = None
                 continue
+            frontmatter_list_key = _extract_frontmatter_value(line, frontmatter, frontmatter_list_key)
             extracted, in_frontmatter_tags_list = _extract_frontmatter_tags(
                 line,
                 line_number,
@@ -118,7 +123,53 @@ def extract_markdown_facts(text: str) -> MarkdownFacts:
         wikilinks=tuple(wikilinks),
         tags=tuple(tags),
         tasks=tuple(tasks),
+        frontmatter={key: tuple(values) for key, values in frontmatter.items()},
     )
+
+
+def _extract_frontmatter_value(
+    line: str,
+    frontmatter: dict[str, list[str]],
+    list_key: str | None,
+) -> str | None:
+    stripped = line.strip()
+    if not stripped:
+        return list_key
+    if list_key and stripped.startswith("- "):
+        value = _clean_frontmatter_scalar(stripped[2:].strip())
+        if value:
+            frontmatter.setdefault(list_key, []).append(value)
+        return list_key
+    if ":" not in stripped:
+        return None
+    key, _, raw_value = stripped.partition(":")
+    key = key.strip()
+    if not key:
+        return None
+    value = raw_value.strip()
+    if not value:
+        frontmatter.setdefault(key, [])
+        return key
+    for item in _split_frontmatter_values(value):
+        frontmatter.setdefault(key, []).append(item)
+    return None
+
+
+def _split_frontmatter_values(value: str) -> list[str]:
+    value = value.strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1]
+        return [
+            cleaned
+            for item in value.split(",")
+            if (cleaned := _clean_frontmatter_scalar(item.strip()))
+        ]
+    cleaned = _clean_frontmatter_scalar(value)
+    return [cleaned] if cleaned else []
+
+
+def _clean_frontmatter_scalar(value: str) -> str:
+    return value.strip().strip("'\"")
 
 
 def _split_wikilink(raw_target: str) -> tuple[str, str | None]:

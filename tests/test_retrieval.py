@@ -94,6 +94,58 @@ Other text.
             self.assertEqual(related[0].path, "A/Duplicate.md")
             self.assertIn("ambiguous link preferred candidate", related[0].reasons)
 
+    def test_related_does_not_return_same_folder_noise_only(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            flat = vault / "ibooks-highlights"
+            flat.mkdir(parents=True)
+            (flat / "Testing Elixir.md").write_text("## Annotations\n\nExcerpt one.\n", encoding="utf-8")
+            (flat / "Random Book.md").write_text("## Annotations\n\nExcerpt two.\n", encoding="utf-8")
+            (flat / "Another Book.md").write_text("## Annotations\n\nExcerpt three.\n", encoding="utf-8")
+
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            related = related_paths(config.index_path, "ibooks-highlights/Testing Elixir.md", limit=5)
+
+            self.assertEqual(related, ())
+
+    def test_inspect_surfaces_exact_duplicate_group_and_canonical_path(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "0_Inbox").mkdir(parents=True)
+            (vault / "2_Areas" / "Work").mkdir(parents=True)
+            text = "# Shared\n\nSame content.\n"
+            (vault / "0_Inbox" / "Shared.md").write_text(text, encoding="utf-8")
+            (vault / "2_Areas" / "Work" / "Shared.md").write_text(text, encoding="utf-8")
+
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            inspection = inspect_path(config.index_path, "0_Inbox/Shared.md")
+
+            self.assertEqual(
+                inspection.exact_duplicates,
+                ("0_Inbox/Shared.md", "2_Areas/Work/Shared.md"),
+            )
+            self.assertEqual(inspection.canonical_path, "2_Areas/Work/Shared.md")
+
 
 if __name__ == "__main__":
     unittest.main()

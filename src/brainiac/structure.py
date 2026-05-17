@@ -8,24 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .routing import load_routing_config
+from .vault_roles import RoleRoot, load_role_roots
 
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
-ROLE_ROOT_SECTIONS = {
-    "area_roots": "area",
-    "project_roots": "project",
-    "resource_roots": "resource",
-    "synthesis_roots": "synthesis",
-    "generated_roots": "generated",
-    "queue_roots": "queue",
-    "archive_roots": "archive",
-    "inbox_roots": "inbox",
-}
-@dataclass(frozen=True)
-class RoleRoot:
-    role: str
-    path: str
-    source: str
 
 
 @dataclass(frozen=True)
@@ -63,7 +49,7 @@ def analyze_structure(
     configured_prefixes = {
         destination.path for destination in routing_config.destinations if destination.path.endswith("/")
     }
-    role_roots = _load_role_roots(routing_config_path)
+    role_roots = load_role_roots(routing_config_path)
 
     with closing(sqlite3.connect(index_path)) as connection:
         markdown_paths = _markdown_paths(connection)
@@ -85,29 +71,6 @@ def analyze_structure(
         unconfigured_profiles=unconfigured,
         recommendations=recommendations,
     )
-
-
-def _load_role_roots(path: Path) -> tuple[RoleRoot, ...]:
-    current_section: str | None = None
-    roots: list[RoleRoot] = []
-    if not path.exists():
-        return ()
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.split("#", 1)[0].rstrip()
-        if not line.strip():
-            continue
-        stripped = line.strip()
-        if not line.startswith(" ") and stripped.endswith(":"):
-            current_section = stripped[:-1]
-            continue
-        if current_section not in ROLE_ROOT_SECTIONS or not stripped.startswith("- "):
-            continue
-        value = _unquote(stripped[2:].strip())
-        if value:
-            roots.append(RoleRoot(role=ROLE_ROOT_SECTIONS[current_section], path=_folder_path(value), source="config"))
-    return tuple(roots)
-
-
 def _profiles(
     connection: sqlite3.Connection,
     roots: tuple[RoleRoot, ...],
@@ -246,14 +209,3 @@ def _recommendations(
 
 def _markdown_paths(connection: sqlite3.Connection) -> set[str]:
     return {row[0] for row in connection.execute("SELECT path FROM files WHERE is_markdown = 1").fetchall()}
-
-
-def _folder_path(value: str) -> str:
-    normalized = value.strip().strip("/")
-    return normalized + "/" if normalized else normalized
-
-
-def _unquote(value: str) -> str:
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value

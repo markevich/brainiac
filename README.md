@@ -55,6 +55,8 @@ PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/obsidian-vault
 
 `config/vault.yml` is local-only and ignored by git. On first run Brainiac creates it from `config/vault.example.yml`; set your local `vault.root` there or pass `--vault-root` for one-off scans. If `vault.root` is empty and the command is run interactively, Brainiac asks for the Obsidian vault path and optional folders to ignore. Extra ignores can also be passed with repeated `--exclude` flags. The command scans source formats from the vault config without mutating source files, writes a disposable SQLite index to `memory/index/brainiac.sqlite`, and writes an inventory report to `memory/generated/reports/inventory.md`.
 
+`scan` is incremental by default when a compatible index already exists for the same vault root. Brainiac still walks the vault tree to detect additions and deletions, but it only reparses changed Markdown files and then re-resolves wikilinks globally from indexed link rows. Use `--full-rebuild` when you intentionally want to discard reuse and rebuild the index from scratch.
+
 The read-only retrieval and routing commands use the existing index:
 
 ```bash
@@ -62,29 +64,39 @@ PYTHONPATH=src python3 -m brainiac search "query"
 PYTHONPATH=src python3 -m brainiac inspect path/to/note.md
 PYTHONPATH=src python3 -m brainiac read path/to/note.md --section "Heading"
 PYTHONPATH=src python3 -m brainiac related path/to/note.md
+PYTHONPATH=src python3 -m brainiac index info
+PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac structure
+PYTHONPATH=src python3 -m brainiac synthesis list
+PYTHONPATH=src python3 -m brainiac synthesis inspect "topic"
+PYTHONPATH=src python3 -m brainiac synthesis stale
+PYTHONPATH=src python3 -m brainiac synthesis suggest "topic"
 ```
 
 `route` and `find-duplicates` are dry-run helpers. They suggest destinations, likely overlaps, and safe note/link names, but they do not write to the vault.
 `structure` analyzes configured vault roles and profiles, then reports unconfigured areas/projects/resources that may need routing coverage.
+`synthesis` commands treat synthesis notes as derived memory over raw sources. They list synthesis notes, inspect source references, report stale notes when source snapshots no longer match the current index, and dry-run draft synthesis notes without writing to the vault.
 
 See:
 
 - [AGENTS.md](AGENTS.md)
+- [docs/brainiac-intro.md](docs/brainiac-intro.md)
 - [docs/context-brief.md](docs/context-brief.md)
 - [docs/concept.md](docs/concept.md)
 - [docs/development-plan.md](docs/development-plan.md)
 - [docs/phase-4-structure-notes.md](docs/phase-4-structure-notes.md)
+- [docs/synthesis-format.md](docs/synthesis-format.md)
 - [docs/write-log-format.md](docs/write-log-format.md)
 - [docs/source-takeaways.md](docs/source-takeaways.md)
 - [docs/operator-context.md](docs/operator-context.md)
+- [docs/operator-playbook.md](docs/operator-playbook.md)
 - [operator.md](operator.md)
 
 ## Two Contexts
 
 Brainiac has two distinct operating contexts:
 
-- `Development context`: build Brainiac itself. Read `AGENTS.md`, `README.md`, `docs/context-brief.md`, `docs/concept.md`, and `docs/development-plan.md`.
-- `Operator context`: use Brainiac with a vault. Read `operator.md`, `docs/operator-context.md`, and the files in `config/`.
+- `Development context`: build Brainiac itself. Read `AGENTS.md`, `README.md`, `docs/brainiac-intro.md`, `docs/concept.md`, and `docs/development-plan.md`.
+- `Operator context`: use Brainiac with a vault. Read `docs/brainiac-intro.md`, `operator.md`, `docs/operator-context.md`, `docs/operator-playbook.md`, and the files in `config/`.

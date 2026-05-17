@@ -77,6 +77,10 @@ def _summary(connection: sqlite3.Connection) -> dict[str, int | str]:
     meta = dict(connection.execute("SELECT key, value FROM scan_meta").fetchall())
     summary["vault_name"] = meta.get("vault_name", "")
     summary["scanned_at"] = meta.get("scanned_at", "")
+    summary["scan_mode"] = meta.get("scan_mode", "")
+    summary["changed_file_count"] = int(meta.get("changed_file_count", "0"))
+    summary["deleted_file_count"] = int(meta.get("deleted_file_count", "0"))
+    summary["unchanged_file_count"] = int(meta.get("unchanged_file_count", "0"))
     return summary
 
 
@@ -93,8 +97,12 @@ def _render_report(
         "",
         f"- Vault: {summary['vault_name']}",
         f"- Scanned at: {summary['scanned_at']}",
+        f"- Scan mode: {summary['scan_mode']}",
         f"- Files: {summary['files']}",
         f"- Markdown files: {summary['markdown_files']}",
+        f"- Changed files: {summary['changed_file_count']}",
+        f"- Deleted files: {summary['deleted_file_count']}",
+        f"- Unchanged files: {summary['unchanged_file_count']}",
         f"- Empty notes: {summary['empty_notes']}",
         f"- Headings: {summary['headings']}",
         f"- Wikilinks: {summary['wikilinks']}",
