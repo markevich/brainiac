@@ -42,3 +42,11 @@ html_policy:
   direct_vault_write: false
   allowed_as_generated_artifact: true
 
+synthesis_policy:
+  canonical: false
+  derived_memory: true
+  dry_run_command: "synthesis suggest"
+  write_mode: "review_before_apply"
+  require_source_links: true
+  require_source_snapshots: true
+  require_explicit_confirmation: true

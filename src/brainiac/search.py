@@ -36,7 +36,19 @@ def search_index(index_path: Path, query: str, *, limit: int = 10) -> tuple[Sear
               snippet(search_index, 6, '[', ']', '...', 18) AS snippet
             FROM search_index
             WHERE search_index MATCH ?
-            ORDER BY score ASC
+            ORDER BY
+              CASE
+                WHEN EXISTS (
+                  SELECT 1
+                  FROM markdown_metadata
+                  WHERE markdown_metadata.file_path = search_index.path
+                    AND markdown_metadata.key IN ('brainiac_type', 'brainiac-type', 'type')
+                    AND markdown_metadata.value IN ('synthesis', 'brainiac-synthesis')
+                )
+                THEN score - 1.0
+                ELSE score
+              END ASC,
+              path ASC
             LIMIT ?
             """,
             (match_query, limit),

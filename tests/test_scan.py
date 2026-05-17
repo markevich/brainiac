@@ -1,5 +1,6 @@
 import sqlite3
 import unittest
+from os import utime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -16,7 +17,7 @@ class ScanTest(unittest.TestCase):
             vault = tmp_path / "vault"
             vault.mkdir()
             (vault / "Note A.md").write_text(
-                "# Note A\n\nLinks to [[Folder/Note B]] and [[Missing]].\n\n- [ ] follow up\n#topic\n",
+                "---\ntopic: Test topic\n---\n# Note A\n\nLinks to [[Folder/Note B]] and [[Missing]].\n\n- [ ] follow up\n#topic\n",
                 encoding="utf-8",
             )
             folder = vault / "Folder"
@@ -69,6 +70,10 @@ class ScanTest(unittest.TestCase):
                     connection.execute("SELECT COUNT(*) FROM search_index").fetchone()[0],
                     2,
                 )
+                self.assertEqual(
+                    connection.execute("SELECT value FROM markdown_metadata WHERE key = 'topic'").fetchone()[0],
+                    "Test topic",
+                )
 
             report = report_path.read_text(encoding="utf-8")
             self.assertIn("Brainiac Inventory Report", report)
@@ -113,6 +118,92 @@ class ScanTest(unittest.TestCase):
                     ("Duplicate", None, "A/Duplicate.md", 0, "ambiguous", "A/Duplicate.md\nB/Duplicate.md"),
                 ],
             )
+
+    def test_incremental_scan_updates_only_changed_files_and_reresolves_links(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            vault.mkdir()
+            (vault / "Source.md").write_text("[[Duplicate]]\n", encoding="utf-8")
+            (vault / "Duplicate.md").write_text("# First\n", encoding="utf-8")
+
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            first = scan_vault(config)
+            write_index(config.index_path, first)
+
+            (vault / "Folder").mkdir()
+            (vault / "Folder" / "Duplicate.md").write_text("# Second\n", encoding="utf-8")
+            (vault / "Duplicate.md").unlink()
+
+            second = scan_vault(config)
+            write_index(config.index_path, second)
+
+            self.assertEqual(second.meta["scan_mode"], "incremental")
+            self.assertEqual(second.meta["changed_file_count"], "1")
+            self.assertEqual(second.meta["deleted_file_count"], "1")
+            self.assertEqual(second.meta["unchanged_file_count"], "1")
+            self.assertEqual(second.changed_paths, ("Folder/Duplicate.md",))
+            self.assertEqual(second.deleted_paths, ("Duplicate.md",))
+
+            with sqlite3.connect(config.index_path) as connection:
+                files = connection.execute("SELECT path FROM files ORDER BY path").fetchall()
+                link = connection.execute(
+                    """
+                    SELECT resolved_path, preferred_path, resolution_status, candidate_paths
+                    FROM wikilinks
+                    WHERE file_path = 'Source.md'
+                    """
+                ).fetchone()
+
+            self.assertEqual(files, [("Folder/Duplicate.md",), ("Source.md",)])
+            self.assertEqual(link, ("Folder/Duplicate.md", None, "resolved", None))
+
+    def test_incremental_scan_preserves_markdown_rows_when_only_mtime_changes(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            vault.mkdir()
+            note = vault / "Topic.md"
+            note.write_text("# Topic\n\nKimchi.\n", encoding="utf-8")
+
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            stat = note.stat()
+            utime(note, (stat.st_atime, stat.st_mtime + 10))
+
+            second = scan_vault(config)
+            write_index(config.index_path, second)
+
+            self.assertEqual(second.meta["scan_mode"], "incremental")
+            self.assertEqual(second.meta["changed_file_count"], "1")
+            self.assertEqual(second.markdown_refresh_paths, ())
+
+            with sqlite3.connect(config.index_path) as connection:
+                headings = connection.execute(
+                    "SELECT COUNT(*) FROM markdown_headings WHERE file_path = 'Topic.md'"
+                ).fetchone()[0]
+                search_rows = connection.execute(
+                    "SELECT COUNT(*) FROM search_index WHERE path = 'Topic.md'"
+                ).fetchone()[0]
+
+            self.assertEqual(headings, 1)
+            self.assertEqual(search_rows, 1)
 
 
 if __name__ == "__main__":

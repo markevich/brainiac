@@ -41,6 +41,8 @@ tags:
   - "#project/brainiac"
 aliases:
   - not-a-tag
+brainiac_type: synthesis
+topic: Brainiac retrieval
 ---
 
 ~~~markdown
@@ -56,13 +58,16 @@ Text #real/tag
 
         self.assertEqual(
             [(tag.value, tag.line) for tag in facts.tags],
-            [("#todo/soon", 3), ("#project/brainiac", 4), ("#real/tag", 16)],
+            [("#todo/soon", 3), ("#project/brainiac", 4), ("#real/tag", 18)],
         )
         self.assertEqual(
             [(heading.level, heading.text, heading.line) for heading in facts.headings],
-            [(1, "Real Heading", 15)],
+            [(1, "Real Heading", 17)],
         )
         self.assertEqual(facts.wikilinks, ())
+        self.assertEqual(facts.frontmatter["brainiac_type"], ("synthesis",))
+        self.assertEqual(facts.frontmatter["topic"], ("Brainiac retrieval",))
+        self.assertEqual(facts.frontmatter["aliases"], ("not-a-tag",))
 
 
 if __name__ == "__main__":

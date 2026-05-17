@@ -1,0 +1,218 @@
+# Brainiac Operator Playbook
+
+This playbook is the procedural startup and operating guide for Jarvis using Brainiac on a live vault.
+
+Use it in operator context, not when developing Brainiac itself.
+
+## Startup Order
+
+When a new chat starts and the task is about operating on a vault:
+
+1. Read `config/vault.yml`, `config/routing.yml`, and `config/policies.yml`.
+2. Read `operator.md`, `docs/operator-context.md`, and this playbook.
+3. Run `brainiac index info`.
+4. If the task depends on current vault state, run `brainiac index info --check-filesystem`.
+5. Only run `brainiac scan` when:
+   - the index is missing;
+   - filesystem drift is non-trivial;
+   - the user explicitly asks for reindexing;
+   - a workflow depends on newly changed files not present in the current index.
+
+Default bias:
+
+- prefer bounded index tools over filesystem reads
+- prefer `index info` before `scan`
+- prefer `scan` before broad manual search
+
+## Default Workflow
+
+For most operator tasks, use this order:
+
+1. `brainiac index info`
+2. `brainiac search` or `brainiac inspect`
+3. if a synthesis note exists, inspect it before reading raw notes
+4. `brainiac related` for neighborhood context
+5. `brainiac read` only for the selected notes
+6. before any write-like proposal:
+   - inspect duplicates/canonical path
+   - inspect sensitivity/policy
+   - prefer synthesis or dry-run output before source mutation
+
+## Indexing Rules
+
+Use `brainiac scan` like a cache maintenance operation, not a reflex.
+
+Use `brainiac scan`:
+
+- when the index is missing;
+- when `index info --check-filesystem` shows real drift;
+- after bulk note creation, moves, or deletes;
+- before duplicate resolution or synthesis refresh that depends on latest content.
+
+Use `brainiac scan --full-rebuild` only when:
+
+- schema compatibility changed;
+- the index looks corrupted or inconsistent;
+- debugging requires a clean rebuild;
+- the user explicitly requests a rebuild.
+
+## Retrieval Rules
+
+`brainiac search`
+
+- use for topic discovery and lexical lookup
+- use before broad file reading
+
+`brainiac inspect`
+
+- use to understand one note's metadata, links, tasks, synthesis references, exact duplicates, and canonical path
+
+`brainiac related`
+
+- use after `inspect` when a note needs local context
+- trust explicit links/backlinks more than same-folder proximity
+- treat weak lexical neighbors as optional context, not evidence
+
+`brainiac read`
+
+- use only after narrowing candidates
+- prefer one file or one section at a time
+
+## Synthesis Rules
+
+Synthesis is derived memory, not source truth.
+
+Use `brainiac synthesis suggest` when:
+
+- a topic is important enough to preserve conclusions over time;
+- multiple raw notes overlap and need reconciliation;
+- exact or semantic duplicates need to be understood before source-note cleanup.
+
+Use `brainiac synthesis stale` when:
+
+- synthesis notes already exist;
+- the user wants to refresh conclusions after source changes;
+- maintenance work is focused on keeping derived memory current.
+
+Default synthesis workflow:
+
+1. `brainiac synthesis suggest <topic-or-path>`
+2. keep strong source notes as the main evidence set
+3. treat body-only lexical matches as weak context
+4. read only selected source notes or sections
+5. write or update synthesis only through explicit review/apply workflow
+
+## Duplicate Rules
+
+Treat duplicates in two classes.
+
+### Exact duplicates
+
+Definition:
+
+- same content hash, different paths
+
+Default handling:
+
+- Brainiac should choose a canonical path automatically for retrieval, relatedness, and synthesis
+- do not use all exact duplicate copies as separate synthesis evidence
+- do not silently delete shadow copies
+- prefer fixing future links and writes to point at the canonical note
+- current implemented behavior is diagnostic and preference-setting first; cleanup/apply workflows are a separate layer
+
+### Semantic duplicates
+
+Definition:
+
+- different content, but overlapping topic or intent
+
+Default handling:
+
+- do not auto-merge source notes on first detection
+- inspect both notes
+- preserve unique details from both
+- synthesize first
+- only then propose source-note merge or retirement with review
+
+## Canonicalization Heuristics
+
+When Brainiac must choose one canonical note among exact duplicates, prefer:
+
+1. active non-archive notes
+2. non-generated, non-queue notes
+3. non-inbox notes for durable knowledge
+4. notes with stronger graph connectivity
+5. more recently maintained notes
+
+This is a retrieval/write preference, not an automatic deletion rule.
+
+## Write Rules
+
+Before proposing or applying writes:
+
+1. confirm the target path is canonical
+2. check whether the path is sensitive
+3. check whether synthesis should be updated first
+4. prefer dry-run or staged output when uncertainty remains
+
+Do not:
+
+- create new ambiguous basename duplicates
+- merge or delete source notes silently
+- rewrite sensitive notes without explicit approval
+
+## Maintenance Workflows
+
+Use Brainiac to detect and then repair vault defects.
+
+Current defect classes:
+
+- filesystem drift versus index
+- missing wikilinks
+- ambiguous wikilinks
+- exact duplicate clusters
+- semantic duplicate clusters
+- stale synthesis notes
+- unconfigured structure profiles
+
+Preferred order for maintenance:
+
+1. refresh or validate the index
+2. inspect duplicate/canonical clusters
+3. refresh or create synthesis for overlapping topics
+4. only then propose source-note cleanup or link rewrites
+
+Important distinction:
+
+- diagnostics and canonical preferences should exist before cleanup tooling
+- a vault can be understood correctly before it can be rewritten safely
+
+## Command Cookbook
+
+```bash
+PYTHONPATH=src python3 -m brainiac index info
+PYTHONPATH=src python3 -m brainiac index info --check-filesystem
+PYTHONPATH=src python3 -m brainiac scan
+PYTHONPATH=src python3 -m brainiac scan --full-rebuild
+PYTHONPATH=src python3 -m brainiac search "query"
+PYTHONPATH=src python3 -m brainiac inspect path/to/note.md
+PYTHONPATH=src python3 -m brainiac read path/to/note.md --section "Heading"
+PYTHONPATH=src python3 -m brainiac related path/to/note.md
+PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac structure
+PYTHONPATH=src python3 -m brainiac synthesis list
+PYTHONPATH=src python3 -m brainiac synthesis inspect "topic"
+PYTHONPATH=src python3 -m brainiac synthesis stale
+PYTHONPATH=src python3 -m brainiac synthesis suggest "topic-or-path"
+```
+
+## Current Biases
+
+Use these biases until more advanced workflows exist:
+
+- exact duplicates: canonicalize automatically in retrieval and synthesis
+- semantic duplicates: synthesize first, merge later
+- inbox and todo notes: good context, weak canonical memory
+- archive-like notes: historical context, weak canonical memory
+- synthesis notes: first context layer when they exist

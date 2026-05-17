@@ -6,12 +6,14 @@ from pathlib import Path
 
 from .config import load_vault_config, with_vault_overrides
 from .index import write_index
+from .index_status import read_index_info
 from .report import write_inventory_report
 from .retrieval import inspect_path, read_path, related_paths
 from .routing import find_duplicates, route_content
 from .scanner import scan_vault
 from .search import search_index
 from .structure import analyze_structure
+from .synthesis import inspect_synthesis, list_synthesis_notes, stale_synthesis_notes, suggest_synthesis
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,6 +31,11 @@ def main(argv: list[str] | None = None) -> int:
     scan_parser.add_argument("--index", type=Path, help="Override SQLite index output path.")
     scan_parser.add_argument("--report", type=Path, help="Inventory report output path.")
     scan_parser.add_argument("--no-report", action="store_true", help="Skip inventory report generation.")
+    scan_parser.add_argument(
+        "--full-rebuild",
+        action="store_true",
+        help="Ignore any compatible existing index and rebuild from scratch.",
+    )
     scan_parser.add_argument(
         "--exclude",
         action="append",
@@ -54,7 +61,23 @@ def main(argv: list[str] | None = None) -> int:
     related_parser = subparsers.add_parser("related", help="Find notes related to one indexed path.")
     related_parser.add_argument("path", help="Vault-relative path.")
     related_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    related_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
     related_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
+
+    index_parser = subparsers.add_parser("index", help="Inspect index metadata and freshness.")
+    index_subparsers = index_parser.add_subparsers(dest="index_command", required=True)
+    index_info_parser = index_subparsers.add_parser("info", help="Show index metadata and optional filesystem drift.")
+    index_info_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    index_info_parser.add_argument(
+        "--check-filesystem",
+        action="store_true",
+        help="Walk the configured vault tree and compare it with the indexed file set.",
+    )
 
     route_parser = subparsers.add_parser("route", help="Dry-run route new content into the vault.")
     route_parser.add_argument("content", nargs="?", help="Content to route. Use --file for longer input.")
@@ -87,6 +110,58 @@ def main(argv: list[str] | None = None) -> int:
     )
     structure_parser.add_argument("--limit", type=int, default=100, help="Maximum number of profiles.")
 
+    synthesis_parser = subparsers.add_parser("synthesis", help="Read-only synthesis note tools.")
+    synthesis_subparsers = synthesis_parser.add_subparsers(dest="synthesis_command", required=True)
+    synthesis_list_parser = synthesis_subparsers.add_parser("list", help="List indexed synthesis notes.")
+    synthesis_list_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    synthesis_list_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    synthesis_list_parser.add_argument("--limit", type=int, default=50, help="Maximum number of notes.")
+
+    synthesis_inspect_parser = synthesis_subparsers.add_parser(
+        "inspect",
+        help="Inspect one synthesis note by path or topic.",
+    )
+    synthesis_inspect_parser.add_argument("topic_or_path", help="Synthesis note path or topic substring.")
+    synthesis_inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    synthesis_inspect_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+
+    synthesis_stale_parser = synthesis_subparsers.add_parser(
+        "stale",
+        help="List synthesis notes whose snapshotted sources changed.",
+    )
+    synthesis_stale_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    synthesis_stale_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    synthesis_stale_parser.add_argument("--limit", type=int, default=50, help="Maximum number of notes.")
+
+    synthesis_suggest_parser = synthesis_subparsers.add_parser(
+        "suggest",
+        help="Dry-run a synthesis note draft and source snapshot list.",
+    )
+    synthesis_suggest_parser.add_argument("topic_or_path", help="Topic text, raw source path, or synthesis path.")
+    synthesis_suggest_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    synthesis_suggest_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    synthesis_suggest_parser.add_argument("--limit", type=int, default=8, help="Maximum number of source notes.")
+
     args = parser.parse_args(argv)
     try:
         if args.command == "scan":
@@ -99,12 +174,16 @@ def main(argv: list[str] | None = None) -> int:
             return _read(args)
         if args.command == "related":
             return _related(args)
+        if args.command == "index":
+            return _index(args)
         if args.command == "route":
             return _route(args)
         if args.command == "find-duplicates":
             return _find_duplicates(args)
         if args.command == "structure":
             return _structure(args)
+        if args.command == "synthesis":
+            return _synthesis(args)
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
@@ -118,12 +197,21 @@ def _scan(args: argparse.Namespace) -> int:
     index_path = args.index or config.index_path
     report_path = args.report or (config.generated_root / "reports" / "inventory.md")
 
-    result = scan_vault(config)
+    result = scan_vault(config, full_rescan=args.full_rebuild)
     write_index(index_path, result)
     if not args.no_report:
         write_inventory_report(index_path, report_path)
 
-    print(f"Indexed {len(result.files)} files ({len(result.markdown)} Markdown) into {index_path}")
+    print(
+        "Indexed "
+        f"{len(result.files)} files "
+        f"({result.meta['markdown_count']} Markdown) into {index_path}"
+    )
+    print(
+        "Scan mode: "
+        f"{result.meta['scan_mode']}; changed files: {result.meta['changed_file_count']}; "
+        f"deleted files: {result.meta['deleted_file_count']}; unchanged files: {result.meta['unchanged_file_count']}"
+    )
     if not args.no_report:
         print(f"Wrote inventory report to {report_path}")
     return 0
@@ -189,6 +277,14 @@ def _inspect(args: argparse.Namespace) -> int:
         if not suffix and link.preferred_path:
             suffix = f" -> preferred {link.preferred_path}"
         print(f"  {link.file_path}:L{link.line} {link.resolution_status}: [[{link.target}]]{suffix}")
+    print(f"Synthesis references: {len(inspection.synthesis_references)}")
+    for path in inspection.synthesis_references[:20]:
+        print(f"  {path}")
+    if inspection.exact_duplicates:
+        print(f"Exact duplicates: {len(inspection.exact_duplicates)}")
+        print(f"Canonical path: {inspection.canonical_path}")
+        for path in inspection.exact_duplicates:
+            print(f"  {path}")
     return 0
 
 
@@ -202,7 +298,7 @@ def _read(args: argparse.Namespace) -> int:
 def _related(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    results = related_paths(index_path, args.path, limit=args.limit)
+    results = related_paths(index_path, args.path, limit=args.limit, routing_config_path=args.routing_config)
     if not results:
         print("No related notes.")
         return 0
@@ -210,6 +306,55 @@ def _related(args: argparse.Namespace) -> int:
         print(f"{position}. {result.path} ({result.score})")
         print(f"   {', '.join(result.reasons)}")
     return 0
+
+
+def _index(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    if args.index_command == "info":
+        info = read_index_info(index_path, config=config, check_filesystem=args.check_filesystem)
+        print(f"Index: {index_path}")
+        for key in (
+            "vault_name",
+            "vault_root",
+            "schema_version",
+            "scanned_at",
+            "scan_mode",
+            "file_count",
+            "markdown_count",
+            "changed_file_count",
+            "deleted_file_count",
+            "unchanged_file_count",
+        ):
+            if key in info.meta:
+                print(f"{key}: {info.meta[key]}")
+        print(f"indexed_files: {info.file_count}")
+        print(f"indexed_markdown_files: {info.markdown_count}")
+        print(f"exact_duplicate_groups: {info.exact_duplicate_groups}")
+        print(f"exact_duplicate_files: {info.exact_duplicate_files}")
+        if info.duplicate_examples:
+            print("Exact duplicate examples:")
+            for group in info.duplicate_examples:
+                print("  group:")
+                for path in group:
+                    print(f"    {path}")
+        if info.drift is not None:
+            print("Filesystem drift:")
+            print(f"  added_files: {info.drift.added_files}")
+            print(f"  deleted_files: {info.drift.deleted_files}")
+            print(f"  metadata_changed_files: {info.drift.metadata_changed_files}")
+            print(f"  unchanged_files: {info.drift.unchanged_files}")
+            for label, values in (
+                ("added_examples", info.drift.added_examples),
+                ("deleted_examples", info.drift.deleted_examples),
+                ("changed_examples", info.drift.changed_examples),
+            ):
+                if values:
+                    print(f"  {label}:")
+                    for value in values:
+                        print(f"    {value}")
+        return 0
+    raise ValueError(f"Unknown index command: {args.index_command}")
 
 
 def _route(args: argparse.Namespace) -> int:
@@ -300,6 +445,67 @@ def _structure(args: argparse.Namespace) -> int:
     for recommendation in analysis.recommendations:
         print(f"  - {recommendation}")
     return 0
+
+
+def _synthesis(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    if args.synthesis_command == "list":
+        notes = list_synthesis_notes(index_path, args.routing_config, limit=args.limit)
+        if not notes:
+            print("No synthesis notes.")
+            return 0
+        for position, note in enumerate(notes, start=1):
+            stale = f", stale sources: {note.stale_source_count}" if note.stale_source_count else ""
+            print(f"{position}. {note.path}")
+            print(f"   topic: {note.topic}; sources: {note.source_count}{stale}")
+        return 0
+    if args.synthesis_command == "inspect":
+        inspection = inspect_synthesis(index_path, args.routing_config, args.topic_or_path)
+        print(f"Path: {inspection.note.path}")
+        print(f"Title: {inspection.note.title}")
+        print(f"Topic: {inspection.note.topic}")
+        print(f"Sources: {len(inspection.sources)}")
+        for source in inspection.sources:
+            snapshot = " (no snapshot)"
+            if source.snapshot_sha256:
+                snapshot = " (snapshot changed)" if source.status == "stale" else " (snapshot current)"
+            print(f"  {source.status}: {source.path}{snapshot}")
+        metadata_items = [
+            (key, values)
+            for key, values in inspection.metadata.items()
+            if key not in {"source_snapshots", "source-snapshots"}
+        ]
+        if metadata_items:
+            print("Metadata:")
+            for key, values in metadata_items:
+                print(f"  {key}: {', '.join(values)}")
+        return 0
+    if args.synthesis_command == "stale":
+        notes = stale_synthesis_notes(index_path, args.routing_config, limit=args.limit)
+        if not notes:
+            print("No stale synthesis notes.")
+            return 0
+        for position, note in enumerate(notes, start=1):
+            print(f"{position}. {note.path}")
+            for source in note.stale_sources:
+                print(f"   stale source: {source.path}")
+        return 0
+    if args.synthesis_command == "suggest":
+        suggestion = suggest_synthesis(index_path, args.routing_config, args.topic_or_path, limit=args.limit)
+        print(f"Action: {suggestion.action}")
+        print(f"Path: {suggestion.path}")
+        print(f"Topic: {suggestion.topic}")
+        print("Source candidates:")
+        if not suggestion.sources:
+            print("  No source candidates.")
+        for position, source in enumerate(suggestion.sources, start=1):
+            print(f"{position}. {source.path} ({source.score})")
+            print(f"   reasons: {', '.join(source.reasons)}")
+        print("Draft:")
+        print(suggestion.draft)
+        return 0
+    raise ValueError(f"Unknown synthesis command: {args.synthesis_command}")
 
 
 def _content_arg(content: str | None, file_path: Path | None) -> str:

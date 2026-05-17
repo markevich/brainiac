@@ -6,6 +6,10 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from .duplicates import canonical_duplicate_path, exact_duplicate_paths
+from .synthesis import is_synthesis_path, synthesis_references_for_source
+from .vault_roles import classify_path_role, load_role_roots
+
 
 TOKEN_RE = re.compile(r"[\w/-]+", re.UNICODE)
 
@@ -38,6 +42,9 @@ class Inspection:
     tasks: tuple[TaskInfo, ...]
     outgoing_links: tuple[LinkInfo, ...]
     backlinks: tuple[LinkInfo, ...]
+    synthesis_references: tuple[str, ...]
+    exact_duplicates: tuple[str, ...]
+    canonical_path: str
 
 
 @dataclass(frozen=True)
@@ -109,6 +116,9 @@ def inspect_path(index_path: Path, note_path: str) -> Inspection:
                 (note_path, note_path),
             ).fetchall()
         )
+        synthesis_references = synthesis_references_for_source(connection, note_path)
+        exact_duplicates = exact_duplicate_paths(connection, note_path)
+        canonical_path = canonical_duplicate_path(connection, note_path, load_role_roots(Path("config/routing.yml")))
 
     return Inspection(
         path=file_row[0],
@@ -119,6 +129,9 @@ def inspect_path(index_path: Path, note_path: str) -> Inspection:
         tasks=tasks,
         outgoing_links=outgoing_links,
         backlinks=backlinks,
+        synthesis_references=synthesis_references,
+        exact_duplicates=exact_duplicates,
+        canonical_path=canonical_path,
     )
 
 
@@ -155,7 +168,13 @@ def read_path(
     return text
 
 
-def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple[RelatedResult, ...]:
+def related_paths(
+    index_path: Path,
+    note_path: str,
+    *,
+    limit: int = 10,
+    routing_config_path: Path = Path("config/routing.yml"),
+) -> tuple[RelatedResult, ...]:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     with closing(sqlite3.connect(index_path)) as connection:
@@ -163,14 +182,30 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
         if file_exists is None:
             raise FileNotFoundError(f"Path not found in index: {note_path}")
 
+        role_roots = load_role_roots(routing_config_path)
+        note_role = classify_path_role(note_path, role_roots)
+        note_canonical_path = canonical_duplicate_path(connection, note_path, role_roots)
         scores: dict[str, int] = {}
         reasons: dict[str, list[str]] = {}
+        canonical_cache: dict[str, str] = {}
 
         def add(path: str | None, score: int, reason: str) -> None:
             if not path or path == note_path:
                 return
-            scores[path] = scores.get(path, 0) + score
-            reasons.setdefault(path, []).append(reason)
+            canonical = canonical_cache.get(path)
+            if canonical is None:
+                canonical = canonical_duplicate_path(connection, path, role_roots)
+                canonical_cache[path] = canonical
+            if canonical == note_path:
+                return
+            scores[canonical] = scores.get(canonical, 0) + score
+            reasons.setdefault(canonical, []).append(reason)
+            if canonical != path:
+                reasons.setdefault(canonical, []).append(f"exact duplicate canonicalized from {path}")
+
+        if note_canonical_path != note_path:
+            scores[note_canonical_path] = scores.get(note_canonical_path, 0) + 115
+            reasons.setdefault(note_canonical_path, []).append("exact duplicate canonical candidate")
 
         for resolved_path, preferred_path, status in connection.execute(
             """
@@ -190,6 +225,9 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
             (note_path, note_path),
         ).fetchall():
             add(file_path[0], 90, "backlink")
+
+        for synthesis_path in synthesis_references_for_source(connection, note_path):
+            add(synthesis_path, 110, "synthesis reference")
 
         note_tags = {
             row[0]
@@ -211,9 +249,10 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
                 add(file_path[0], tag_score, f"shared tag {tag}")
 
         folder = Path(note_path).parent.as_posix()
+        folder_size = 0
         if folder != ".":
             folder_prefix = folder + "/"
-            for file_path in connection.execute(
+            folder_paths = connection.execute(
                 """
                 SELECT path
                 FROM files
@@ -221,13 +260,16 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
                 LIMIT 100
                 """,
                 (note_path, folder_prefix + "%"),
-            ).fetchall():
-                add(file_path[0], 5, "same folder")
+            ).fetchall()
+            folder_size = len(folder_paths)
+            if folder_size <= 5 and note_role != "resource":
+                for file_path in folder_paths:
+                    add(file_path[0], 5, "same folder")
 
         source_terms = _search_terms(
             connection.execute(
                 """
-                SELECT path_text, title, headings
+                SELECT title, headings, tags
                 FROM search_index
                 WHERE path = ?
                 """,
@@ -235,19 +277,23 @@ def related_paths(index_path: Path, note_path: str, *, limit: int = 10) -> tuple
             ).fetchone()
         )
         if source_terms:
-            for path, path_text, title, headings in connection.execute(
-                """
-                SELECT path, path_text, title, headings
-                FROM search_index
-                WHERE path != ?
-                """,
-                (note_path,),
-            ).fetchall():
-                overlap = source_terms & _search_terms((path_text, title, headings))
+            candidate_paths = _lexical_candidates(connection, note_path, source_terms)
+            for path, title, headings, tags in candidate_paths:
+                overlap = source_terms & _search_terms((title, headings, tags))
                 if len(overlap) >= 2:
-                    add(path, min(len(overlap), 5) * 5, "shared title/heading terms")
+                    score = min(len(overlap), 4) * 8
+                    if is_synthesis_path(connection, path):
+                        score += 25
+                    candidate_role = classify_path_role(path, role_roots)
+                    if note_role and candidate_role and note_role == candidate_role:
+                        score += 8
+                        reasons.setdefault(path, []).append(f"same role {note_role}")
+                    add(path, score, f"shared title/heading terms: {', '.join(sorted(overlap)[:4])}")
 
-    ordered = sorted(scores.items(), key=lambda item: (-item[1], item[0]))[:limit]
+    ordered = sorted(
+        ((path, score) for path, score in scores.items() if score >= 10),
+        key=lambda item: (-item[1], item[0]),
+    )[:limit]
     return tuple(
         RelatedResult(path=path, score=score, reasons=tuple(dict.fromkeys(reasons[path])))
         for path, score in ordered
@@ -280,6 +326,30 @@ def _tag_score(tag: str) -> int:
     if tag.startswith("#todo/"):
         return 5
     return 20
+
+
+def _lexical_candidates(connection: sqlite3.Connection, note_path: str, source_terms: set[str]) -> tuple[tuple[str, str, str, str], ...]:
+    if len(source_terms) < 2:
+        return ()
+    query = _fts_or_query(sorted(source_terms)[:8])
+    if not query:
+        return ()
+    rows = connection.execute(
+        """
+        SELECT path, title, headings, tags
+        FROM search_index
+        WHERE search_index MATCH ? AND path != ?
+        ORDER BY bm25(search_index) ASC, path ASC
+        LIMIT 40
+        """,
+        (query, note_path),
+    ).fetchall()
+    return tuple((row[0], row[1] or "", row[2] or "", row[3] or "") for row in rows)
+
+
+def _fts_or_query(tokens: list[str]) -> str:
+    quoted = ['"' + token.replace('"', '""') + '"' for token in tokens if token.strip("-_/")]
+    return " OR ".join(quoted)
 
 
 def _vault_root(connection: sqlite3.Connection) -> Path:
