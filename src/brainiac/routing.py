@@ -6,6 +6,8 @@ from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
 
+from .routing_config import ensure_routing_config
+
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
 HEADING_RE = re.compile(r"^#{1,6}\s+(.+?)\s*#*\s*$", re.MULTILINE)
@@ -87,8 +89,7 @@ def load_routing_destinations(path: Path) -> tuple[RoutingDestination, ...]:
 
 
 def load_routing_config(path: Path) -> RoutingConfig:
-    if not path.exists():
-        raise FileNotFoundError(f"Routing config not found: {path}")
+    path = ensure_routing_config(path)
 
     current_section: str | None = None
     destinations: list[RoutingDestination] = []

@@ -20,7 +20,10 @@ Jarvis should:
 ## Operating Rules
 
 - Do not scan the entire vault unless explicitly asked.
-- Prefer Brainiac index/search tools once they exist.
+- Prefer Brainiac CLI and index/search tools once they exist.
+- For discovery, duplicate checks, and routing context, prefer `brainiac index info`, `brainiac index info --check-filesystem`, `brainiac search`, `brainiac inspect`, and related Brainiac commands before direct filesystem search.
+- If the index is stale and the task depends on current vault state, prefer `brainiac scan` over broad manual `rg` or full-vault filesystem content search.
+- Use direct filesystem reads/searches only as a narrow fallback when Brainiac tools are unavailable, insufficient, or the task is intentionally about raw files outside indexed coverage.
 - Treat indexes as disposable caches, not truth.
 - Treat Markdown/SQLite/JSON/source files as truth.
 - Treat generated HTML as presentation only.

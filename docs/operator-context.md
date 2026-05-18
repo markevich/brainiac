@@ -22,13 +22,14 @@ Jarvis should:
 
 When asked to work with the vault:
 
-1. Read `config/vault.yml`, `config/routing.yml`, and `config/policies.yml`.
-2. Use Brainiac tools if available.
-3. If tools are not implemented yet, use narrow file reads/searches and avoid scanning the whole vault.
-4. Return compact findings with file paths.
-5. Ask before sensitive writes.
-6. Log writes in `memory/logs/operations.md`.
-7. When duplicate clusters appear, pick a canonical path for future work before creating new notes.
+1. Read the local `config/vault.yml`, `config/routing.yml`, and `config/policies.yml` files.
+2. Use Brainiac tools if available and prefer them over direct filesystem search.
+3. If the index is stale and the task depends on current vault state, refresh it with `brainiac scan` before broad manual file discovery.
+4. If Brainiac tools are not implemented or cannot answer the task, use narrow file reads/searches and avoid scanning the whole vault.
+5. Return compact findings with file paths.
+6. Ask before sensitive writes.
+7. Log writes in `memory/logs/operations.md`.
+8. When duplicate clusters appear, pick a canonical path for future work before creating new notes.
 
 ## Context Strategy
 
@@ -38,9 +39,15 @@ Use this order:
 
 1. Relevant config.
 2. Existing synthesis note if one exists.
-3. Search/index results.
+3. Search/index results from Brainiac.
 4. Selected source sections/files.
 5. Generated artifact only if it helps the current task.
+
+Default bias:
+
+- Brainiac CLI before direct filesystem search
+- `brainiac scan` before broad manual vault discovery when freshness matters
+- narrow filesystem reads only after Brainiac has narrowed the target
 
 ## Source of Truth Rules
 

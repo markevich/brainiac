@@ -47,8 +47,10 @@ Rules:
 
 ```text
 config/
-  vault.yml
-  routing.yml
+  vault.example.yml
+  routing.example.yml
+  vault.yml        # local, gitignored
+  routing.yml      # local, gitignored
   policies.yml
 docs/
   concept.md

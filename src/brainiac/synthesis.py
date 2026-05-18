@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 
 from .duplicates import canonical_duplicate_path
+from .routing_config import ensure_routing_config
 from .routing import shortest_unique_link
 from .search import search_index
 from .vault_roles import classify_path_role, load_role_roots
@@ -191,6 +192,8 @@ def synthesis_references_for_source(
 
 
 def load_synthesis_roots(path: Path) -> tuple[str, ...]:
+    if path.name == "routing.yml":
+        path = ensure_routing_config(path)
     current_section: str | None = None
     roots: list[str] = []
     if not path.exists():

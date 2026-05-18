@@ -5,8 +5,10 @@ import sys
 from pathlib import Path
 
 from .config import load_vault_config, with_vault_overrides
+from .duplicates import inspect_duplicates, list_exact_duplicate_groups
 from .index import write_index
 from .index_status import read_index_info
+from .maintenance import maintenance_report
 from .report import write_inventory_report
 from .retrieval import inspect_path, read_path, related_paths
 from .routing import find_duplicates, route_content
@@ -100,6 +102,60 @@ def main(argv: list[str] | None = None) -> int:
     duplicates_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     duplicates_parser.add_argument("--limit", type=int, default=5, help="Maximum number of results.")
 
+    duplicates_maintenance_parser = subparsers.add_parser(
+        "duplicates",
+        help="Inspect exact duplicate groups and related semantic duplicate ideas.",
+    )
+    duplicates_subparsers = duplicates_maintenance_parser.add_subparsers(
+        dest="duplicates_command",
+        required=True,
+    )
+    duplicates_list_parser = duplicates_subparsers.add_parser(
+        "list",
+        help="List exact duplicate groups and their canonical candidates.",
+    )
+    duplicates_list_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    duplicates_list_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    duplicates_list_parser.add_argument("--limit", type=int, default=50, help="Maximum number of exact duplicate groups.")
+
+    duplicates_inspect_parser = duplicates_subparsers.add_parser(
+        "inspect",
+        help="Inspect one exact duplicate group by path or group id.",
+    )
+    duplicates_inspect_parser.add_argument("path_or_group", help="Indexed path or group id like sha256:abcd1234.")
+    duplicates_inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    duplicates_inspect_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+    duplicates_inspect_parser.add_argument(
+        "--semantic-limit",
+        type=int,
+        default=5,
+        help="Maximum number of semantic duplicate ideas to print.",
+    )
+
+    maintenance_parser = subparsers.add_parser("maintenance", help="Read-only vault maintenance diagnostics.")
+    maintenance_subparsers = maintenance_parser.add_subparsers(dest="maintenance_command", required=True)
+    maintenance_report_parser = maintenance_subparsers.add_parser(
+        "report",
+        help="Report maintenance findings such as meaningful empty directories.",
+    )
+    maintenance_report_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    maintenance_report_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
+
     structure_parser = subparsers.add_parser("structure", help="Analyze configured vault roles and profiles.")
     structure_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     structure_parser.add_argument(
@@ -180,6 +236,10 @@ def main(argv: list[str] | None = None) -> int:
             return _route(args)
         if args.command == "find-duplicates":
             return _find_duplicates(args)
+        if args.command == "duplicates":
+            return _duplicates(args)
+        if args.command == "maintenance":
+            return _maintenance(args)
         if args.command == "structure":
             return _structure(args)
         if args.command == "synthesis":
@@ -404,6 +464,81 @@ def _find_duplicates(args: argparse.Namespace) -> int:
         print(f"{position}. {result.path} ({result.score})")
         print(f"   {', '.join(result.reasons)}")
     return 0
+
+
+def _duplicates(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    if args.duplicates_command == "list":
+        groups = list_exact_duplicate_groups(index_path, routing_config_path=args.routing_config, limit=args.limit)
+        if not groups:
+            print("No exact duplicate groups.")
+            return 0
+        for position, group in enumerate(groups, start=1):
+            print(f"{position}. {group.group_id} ({len(group.paths)} files)")
+            print(f"   canonical: {group.canonical.path}")
+            print(f"   why canonical: {', '.join(group.canonical.reasons)}")
+            for path in group.paths:
+                suffix = " [canonical]" if path == group.canonical.path else ""
+                print(f"   - {path}{suffix}")
+        print("Semantic duplicate ideas are separate from exact duplicate groups. Use `brainiac duplicates inspect`.")
+        return 0
+    if args.duplicates_command == "inspect":
+        inspection = inspect_duplicates(
+            index_path,
+            args.path_or_group,
+            routing_config_path=args.routing_config,
+            semantic_limit=args.semantic_limit,
+        )
+        print(f"Query: {inspection.query}")
+        if inspection.exact_group is None:
+            print("Exact duplicate group: none")
+        else:
+            group = inspection.exact_group
+            print(f"Exact duplicate group: {group.group_id}")
+            print(f"Canonical path: {group.canonical.path}")
+            print(f"Why canonical: {', '.join(group.canonical.reasons)}")
+            print("Group members:")
+            for path in group.paths:
+                suffix = " [canonical]" if path == group.canonical.path else ""
+                print(f"  {path}{suffix}")
+        print("Semantic duplicate ideas:")
+        if not inspection.semantic_duplicates:
+            print("  None outside the exact duplicate group.")
+            return 0
+        for position, duplicate in enumerate(inspection.semantic_duplicates, start=1):
+            print(f"{position}. {duplicate.path} ({duplicate.score})")
+            print(f"   {', '.join(duplicate.reasons)}")
+        return 0
+    raise ValueError(f"Unknown duplicates command: {args.duplicates_command}")
+
+
+def _maintenance(args: argparse.Namespace) -> int:
+    config = load_vault_config(args.config)
+    index_path = args.index or config.index_path
+    if args.maintenance_command == "report":
+        report = maintenance_report(
+            index_path,
+            config=config,
+            routing_config_path=args.routing_config,
+        )
+        print(f"Findings: {len(report.findings)}")
+        print(f"Empty directories: {report.empty_directory_count}")
+        print(f"Exact duplicate groups: {report.exact_duplicate_count}")
+        print(f"Stale synthesis notes: {report.stale_synthesis_count}")
+        print(f"Ambiguous wikilinks: {report.ambiguous_wikilink_count}")
+        print(f"Missing wikilinks: {report.missing_wikilink_count}")
+        print(f"Unconfigured profiles: {report.unconfigured_profile_count}")
+        if not report.findings:
+            print("No maintenance findings.")
+            return 0
+        for finding in report.findings:
+            print(f"{finding.severity.upper()} {finding.type} {finding.path}")
+            print(f"  summary: {finding.summary}")
+            print(f"  reasons: {', '.join(finding.reasons)}")
+            print(f"  action: {finding.suggested_action}")
+        return 0
+    raise ValueError(f"Unknown maintenance command: {args.maintenance_command}")
 
 
 def _structure(args: argparse.Namespace) -> int:

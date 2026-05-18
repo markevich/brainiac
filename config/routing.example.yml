@@ -1,0 +1,85 @@
+# Brainiac routing example
+#
+# This file is a tracked template that shows the generic config shape.
+# Copy it to `config/routing.yml` for local vault-specific mappings.
+
+inbox:
+  default: "Inbox/"
+
+projects:
+  root: "Projects/"
+
+areas:
+  default: "Areas/"
+
+resources:
+  default: "Resources/"
+
+synthesis:
+  root: "Brainiac/memory/synthesis/"
+
+queue:
+  root: "Brainiac/memory/queue/"
+
+generated:
+  root: "Brainiac/memory/generated/"
+
+archive:
+  root: "Archive/"
+
+inbox_roots:
+  - "Inbox/"
+
+project_roots:
+  - "Projects/"
+
+area_roots:
+  - "Areas/"
+
+resource_roots:
+  - "Resources/"
+
+synthesis_roots:
+  - "Brainiac/memory/synthesis/"
+
+queue_roots:
+  - "Brainiac/memory/queue/"
+
+generated_roots:
+  - "Brainiac/memory/generated/"
+
+archive_roots:
+  - "Archive/"
+
+disabled_destination_sections:
+  - "generated"
+
+important_terms:
+  - "ai"
+  - "api"
+  - "ui"
+
+stopwords:
+  - "and"
+  - "the"
+  - "for"
+
+sensitive_destination_keys:
+  - "areas.health"
+  - "areas.family"
+  - "areas.finance"
+  - "areas.legal"
+
+sensitive_path_prefixes:
+  - "Areas/Health/"
+  - "Areas/Family/"
+  - "Areas/Finance/"
+  - "Areas/Legal/"
+
+rules:
+  - name: "Prefer updating existing canonical notes"
+    description: "Before creating a new note, search for existing related notes and duplicates."
+  - name: "Keep raw imports separate"
+    description: "Raw captures and imports should remain as sources; synthesize into separate notes."
+  - name: "Generated artifacts are not truth"
+    description: "Dashboards and reports should be regenerated from source data."

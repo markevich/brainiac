@@ -3,5 +3,6 @@ __pycache__/
 .venv/
 uv.lock
 config/vault.yml
+config/routing.yml
 memory/index/*.sqlite
 memory/generated/reports/inventory.md

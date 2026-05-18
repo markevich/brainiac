@@ -8,11 +8,12 @@ Use it in operator context, not when developing Brainiac itself.
 
 When a new chat starts and the task is about operating on a vault:
 
-1. Read `config/vault.yml`, `config/routing.yml`, and `config/policies.yml`.
+1. Read the local `config/vault.yml`, `config/routing.yml`, and `config/policies.yml` files.
 2. Read `operator.md`, `docs/operator-context.md`, and this playbook.
 3. Run `brainiac index info`.
-4. If the task depends on current vault state, run `brainiac index info --check-filesystem`.
-5. Only run `brainiac scan` when:
+4. Run `brainiac index info --check-filesystem` by default for a new operator chat.
+5. If the task clearly does not depend on current vault state, this filesystem drift check may be skipped.
+6. Only run `brainiac scan` when:
    - the index is missing;
    - filesystem drift is non-trivial;
    - the user explicitly asks for reindexing;
@@ -21,7 +22,9 @@ When a new chat starts and the task is about operating on a vault:
 Default bias:
 
 - prefer bounded index tools over filesystem reads
+- prefer Brainiac CLI over direct filesystem search for discovery and routing
 - prefer `index info` before `scan`
+- prefer `index info --check-filesystem` near the start of a new operator chat
 - prefer `scan` before broad manual search
 
 ## Default Workflow
@@ -29,11 +32,12 @@ Default bias:
 For most operator tasks, use this order:
 
 1. `brainiac index info`
-2. `brainiac search` or `brainiac inspect`
-3. if a synthesis note exists, inspect it before reading raw notes
-4. `brainiac related` for neighborhood context
-5. `brainiac read` only for the selected notes
-6. before any write-like proposal:
+2. `brainiac index info --check-filesystem`
+3. `brainiac search` or `brainiac inspect`
+4. if a synthesis note exists, inspect it before reading raw notes
+5. `brainiac related` for neighborhood context
+6. `brainiac read` only for the selected notes
+7. before any write-like proposal:
    - inspect duplicates/canonical path
    - inspect sensitivity/policy
    - prefer synthesis or dry-run output before source mutation
@@ -57,6 +61,11 @@ Use `brainiac scan --full-rebuild` only when:
 - the user explicitly requests a rebuild.
 
 ## Retrieval Rules
+
+Filesystem fallback rule:
+
+- do not start with `rg`, `find`, or broad raw-file content search across the vault when Brainiac CLI can answer the question after an index check or scan
+- use direct filesystem inspection only after Brainiac has narrowed the target path, or when debugging/index coverage makes Brainiac insufficient for the task
 
 `brainiac search`
 
@@ -200,6 +209,8 @@ PYTHONPATH=src python3 -m brainiac read path/to/note.md --section "Heading"
 PYTHONPATH=src python3 -m brainiac related path/to/note.md
 PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac duplicates list
+PYTHONPATH=src python3 -m brainiac duplicates inspect <path-or-group>
 PYTHONPATH=src python3 -m brainiac structure
 PYTHONPATH=src python3 -m brainiac synthesis list
 PYTHONPATH=src python3 -m brainiac synthesis inspect "topic"

@@ -53,7 +53,7 @@ This repository now has the first read-only CLI inventory command over one Obsid
 PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/obsidian-vault
 ```
 
-`config/vault.yml` is local-only and ignored by git. On first run Brainiac creates it from `config/vault.example.yml`; set your local `vault.root` there or pass `--vault-root` for one-off scans. If `vault.root` is empty and the command is run interactively, Brainiac asks for the Obsidian vault path and optional folders to ignore. Extra ignores can also be passed with repeated `--exclude` flags. The command scans source formats from the vault config without mutating source files, writes a disposable SQLite index to `memory/index/brainiac.sqlite`, and writes an inventory report to `memory/generated/reports/inventory.md`.
+`config/vault.yml` and `config/routing.yml` are local-only and ignored by git. On first run Brainiac creates them from `config/vault.example.yml` and `config/routing.example.yml`; set your local vault root and local routing/profile mappings there, or pass overrides such as `--vault-root` or `--routing-config` for one-off runs. If `vault.root` is empty and the command is run interactively, Brainiac asks for the Obsidian vault path and optional folders to ignore. Extra ignores can also be passed with repeated `--exclude` flags. The command scans source formats from the vault config without mutating source files, writes a disposable SQLite index to `memory/index/brainiac.sqlite`, and writes an inventory report to `memory/generated/reports/inventory.md`.
 
 `scan` is incremental by default when a compatible index already exists for the same vault root. Brainiac still walks the vault tree to detect additions and deletions, but it only reparses changed Markdown files and then re-resolves wikilinks globally from indexed link rows. Use `--full-rebuild` when you intentionally want to discard reuse and rebuild the index from scratch.
 
@@ -68,6 +68,9 @@ PYTHONPATH=src python3 -m brainiac index info
 PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac find-duplicates --file /path/to/draft.md
+PYTHONPATH=src python3 -m brainiac duplicates list
+PYTHONPATH=src python3 -m brainiac duplicates inspect <path-or-group>
+PYTHONPATH=src python3 -m brainiac maintenance report
 PYTHONPATH=src python3 -m brainiac structure
 PYTHONPATH=src python3 -m brainiac synthesis list
 PYTHONPATH=src python3 -m brainiac synthesis inspect "topic"
@@ -76,6 +79,8 @@ PYTHONPATH=src python3 -m brainiac synthesis suggest "topic"
 ```
 
 `route` and `find-duplicates` are dry-run helpers. They suggest destinations, likely overlaps, and safe note/link names, but they do not write to the vault.
+`duplicates list` and `duplicates inspect` are read-only maintenance diagnostics. They show exact duplicate clusters, the current canonical candidate, why that path wins, and separate semantic duplicate ideas from exact duplicate groups.
+`maintenance report` is a read-only defect report layer. It currently aggregates meaningful empty directories, exact duplicate clusters, stale synthesis notes, missing wikilinks, ambiguous wikilinks, and unconfigured structure profiles into one maintenance finding model, using ignore rules plus role/structure semantics.
 `structure` analyzes configured vault roles and profiles, then reports unconfigured areas/projects/resources that may need routing coverage.
 `synthesis` commands treat synthesis notes as derived memory over raw sources. They list synthesis notes, inspect source references, report stale notes when source snapshots no longer match the current index, and dry-run draft synthesis notes without writing to the vault.
 

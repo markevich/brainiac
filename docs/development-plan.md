@@ -293,12 +293,17 @@ Tasks:
 - [x] Canonicalize exact duplicates in `related`.
 - [x] Canonicalize exact duplicates in `synthesis suggest`.
 - [x] Document duplicate handling rules in operator docs.
-- [ ] Add a dedicated `duplicates list` command for duplicate clusters.
-- [ ] Add `duplicates inspect <path-or-group>` with canonical recommendation and overlap explanation.
-- [ ] Distinguish exact duplicates from semantic duplicates in CLI output and maintenance workflows.
+- [x] Add a dedicated `duplicates list` command for duplicate clusters.
+- [x] Add `duplicates inspect <path-or-group>` with canonical recommendation and overlap explanation.
+- [x] Distinguish exact duplicates from semantic duplicates in CLI output and maintenance workflows.
+- [x] Add a first `maintenance report` command and shared finding model for vault defect diagnostics.
+- [x] Surface meaningful empty directories using ignore rules plus role/structure semantics.
+- [x] Aggregate exact duplicate clusters and stale synthesis notes into the shared maintenance report layer.
+- [x] Expand vault defect reports to summarize ambiguous links, missing links, and unconfigured structure profiles in the same layer.
 - [ ] Add confirm-driven link-rewrite and source-note cleanup workflows for exact duplicate clusters.
 - [ ] Add synthesis-first reconciliation workflow for semantic duplicates before any merge/delete proposal.
-- [ ] Add vault defect reports that summarize ambiguous links, missing links, duplicate clusters, stale synthesis notes, and unconfigured structure profiles.
+- [ ] Add Python-first `maintenance plan/apply` architecture with bounded action types and explicit confirmation.
+- [ ] Keep LLM usage advisory-only for ambiguous link resolution, semantic reconciliation, and synthesis refresh decisions.
 - [ ] Add maintenance write logging for canonicalization and cleanup operations.
 
 Exit criteria:
@@ -314,12 +319,23 @@ Planned commands:
 PYTHONPATH=src python3 -m brainiac duplicates list
 PYTHONPATH=src python3 -m brainiac duplicates inspect <path-or-group>
 PYTHONPATH=src python3 -m brainiac maintenance report
+PYTHONPATH=src python3 -m brainiac maintenance plan <finding-id>
+PYTHONPATH=src python3 -m brainiac maintenance apply <plan-id> --confirm
 ```
+
+Apply architecture:
+
+- Python should detect, classify, diff, validate, plan, apply, and log all maintenance operations.
+- LLM should only interpret ambiguous cases, compare semantic overlaps, propose reconciliation, or draft synthesis refreshes.
+- LLM should not execute vault writes directly; confirmed file operations should be applied by Python from a bounded action model.
+- Expected low-risk Python-first actions: delete empty files/directories, rewrite exact-duplicate links, remove non-canonical exact-duplicate copies, refresh index-backed metadata.
+- Expected hybrid actions: ambiguous wikilink resolution, semantic duplicate reconciliation, synthesis refresh/update.
+- The intended action model should stay explicit and auditable, for example `RewriteWikilinkAction`, `DeleteFileAction`, `DeleteDirectoryAction`, and `UpdateSynthesisAction`.
 
 Current boundary:
 
-- implemented: detect exact duplicates, surface canonical paths, canonicalize exact duplicates for retrieval and synthesis
-- not yet implemented: confirm-driven relink, cleanup/apply workflows, semantic-duplicate reconciliation workflows, and maintenance writes
+- implemented: detect exact duplicates, surface canonical paths, canonicalize exact duplicates for retrieval and synthesis, list exact duplicate clusters, inspect canonical reasons, separate semantic duplicate ideas from exact groups, and report empty directories, exact duplicate clusters, stale synthesis notes, missing/ambiguous wikilinks, and unconfigured structure profiles through a shared maintenance finding model
+- not yet implemented: confirm-driven relink, cleanup/apply workflows, Python-first maintenance execution, semantic-duplicate reconciliation workflows, and maintenance writes
 
 ## Phase 6: First Real Workflow
 

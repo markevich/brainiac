@@ -3,6 +3,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from brainiac.config import load_vault_config
+from brainiac.routing import load_routing_config
 
 
 class ConfigTest(unittest.TestCase):
@@ -49,6 +50,31 @@ index:
             self.assertTrue(path.exists())
             self.assertEqual(config.name, "Example")
             self.assertEqual(config.source_patterns, ("*.md",))
+
+    def test_missing_local_routing_config_is_created_from_template(self):
+        with TemporaryDirectory() as tmp:
+            config_dir = Path(tmp) / "config"
+            config_dir.mkdir()
+            path = config_dir / "routing.yml"
+            example_path = config_dir / "routing.example.yml"
+            example_path.write_text(
+                """inbox:
+  default: "0_Inbox/"
+
+inbox_roots:
+  - "0_Inbox/"
+
+disabled_destination_sections:
+  - "generated"
+""",
+                encoding="utf-8",
+            )
+
+            routing = load_routing_config(path)
+
+            self.assertTrue(path.exists())
+            self.assertEqual(routing.destinations[0].path, "0_Inbox/")
+            self.assertEqual(routing.disabled_destination_sections, frozenset({"generated"}))
 
 
 if __name__ == "__main__":

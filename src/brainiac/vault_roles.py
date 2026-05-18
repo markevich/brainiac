@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from .routing_config import ensure_routing_config
+
 
 ROLE_ROOT_SECTIONS = {
     "area_roots": "area",
@@ -24,6 +26,8 @@ class RoleRoot:
 
 
 def load_role_roots(path: Path) -> tuple[RoleRoot, ...]:
+    if path.name == "routing.yml":
+        path = ensure_routing_config(path)
     current_section: str | None = None
     roots: list[RoleRoot] = []
     if not path.exists():
