@@ -10,11 +10,9 @@ from .duplicates import canonical_duplicate_path
 from .routing_config import ensure_routing_config
 from .routing import shortest_unique_link
 from .search import search_index
-from .vault_roles import classify_path_role, load_role_roots
+from .vault_roles import classify_note_role, classify_path_role, load_role_roots
 
 
-SYNTHESIS_TYPE_KEYS = {"brainiac_type", "brainiac-type", "type"}
-SYNTHESIS_TYPE_VALUES = {"synthesis", "brainiac-synthesis"}
 SOURCE_SNAPSHOT_KEYS = {"source_snapshots", "source-snapshots"}
 UNSAFE_FILENAME_CHARS = set('\\/:*?"<>|')
 
@@ -81,8 +79,9 @@ def list_synthesis_notes(
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     roots = load_synthesis_roots(routing_config_path)
+    role_roots = load_role_roots(routing_config_path)
     with closing(sqlite3.connect(index_path)) as connection:
-        paths = _synthesis_paths(connection, roots)
+        paths = _synthesis_paths(connection, roots, role_roots)
         notes = [_synthesis_note(connection, path) for path in paths]
     return tuple(sorted(notes, key=lambda note: note.path)[:limit])
 
@@ -95,8 +94,9 @@ def inspect_synthesis(
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     roots = load_synthesis_roots(routing_config_path)
+    role_roots = load_role_roots(routing_config_path)
     with closing(sqlite3.connect(index_path)) as connection:
-        path = _resolve_synthesis_path(connection, roots, topic_or_path)
+        path = _resolve_synthesis_path(connection, roots, role_roots, topic_or_path)
         return SynthesisInspection(
             note=_synthesis_note(connection, path),
             metadata=_metadata(connection, path),
@@ -113,9 +113,10 @@ def stale_synthesis_notes(
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     roots = load_synthesis_roots(routing_config_path)
+    role_roots = load_role_roots(routing_config_path)
     stale: list[StaleSynthesisNote] = []
     with closing(sqlite3.connect(index_path)) as connection:
-        for path in _synthesis_paths(connection, roots):
+        for path in _synthesis_paths(connection, roots, role_roots):
             stale_sources = tuple(source for source in _sources(connection, path) if source.status == "stale")
             if stale_sources:
                 stale.append(StaleSynthesisNote(path=path, stale_sources=stale_sources))
@@ -139,7 +140,7 @@ def suggest_synthesis(
             return _update_suggestion(connection, exact_path, limit)
         if exact_path is None:
             try:
-                synthesis_path = _resolve_synthesis_path(connection, roots, topic_or_path)
+                synthesis_path = _resolve_synthesis_path(connection, roots, role_roots, topic_or_path)
                 return _update_suggestion(connection, synthesis_path, limit)
             except FileNotFoundError:
                 pass
@@ -147,7 +148,7 @@ def suggest_synthesis(
         topic = _topic_for_input(connection, topic_or_path, exact_path)
         path = _suggested_synthesis_path(connection, roots, topic)
         action = "update" if _indexed_markdown_path(connection, path) else "create"
-        candidates = _source_candidates(connection, index_path, roots, role_roots, topic, exact_path, limit)
+        candidates = _source_candidates(connection, index_path, routing_config_path, roots, role_roots, topic, exact_path, limit)
         return SynthesisSuggestion(
             topic=topic,
             action=action,
@@ -160,18 +161,7 @@ def suggest_synthesis(
 def is_synthesis_path(connection: sqlite3.Connection, path: str, roots: tuple[str, ...] = ()) -> bool:
     if any(path.startswith(root) for root in roots):
         return True
-    rows = connection.execute(
-        """
-        SELECT key, value
-        FROM markdown_metadata
-        WHERE file_path = ?
-        """,
-        (path,),
-    ).fetchall()
-    for key, value in rows:
-        if key.casefold() in SYNTHESIS_TYPE_KEYS and value.casefold() in SYNTHESIS_TYPE_VALUES:
-            return True
-    return False
+    return classify_note_role(connection, path, ()) == "synthesis"
 
 
 def synthesis_references_for_source(
@@ -234,6 +224,7 @@ def _update_suggestion(connection: sqlite3.Connection, synthesis_path: str, limi
 def _source_candidates(
     connection: sqlite3.Connection,
     index_path: Path,
+    routing_config_path: Path,
     roots: tuple[str, ...],
     role_roots,
     topic: str,
@@ -251,7 +242,10 @@ def _source_candidates(
             candidates[canonical_seed.path] = canonical_seed
             seen_hashes.add(canonical_seed.sha256)
 
-    for position, result in enumerate(search_index(index_path, topic, limit=max(limit * 3, 10)), start=1):
+    for position, result in enumerate(
+        search_index(index_path, topic, limit=max(limit * 3, 10), routing_config_path=routing_config_path),
+        start=1,
+    ):
         if result.path == seed_path or is_synthesis_path(connection, result.path, roots):
             continue
         candidate = _candidate_from_source(
@@ -388,7 +382,7 @@ def _draft_note(
     if not source_lines:
         source_lines = "- "
     return f"""---
-brainiac_type: synthesis
+brainiac_role: synthesis
 topic: {topic}
 last_reviewed: {date.today().isoformat()}
 source_snapshots:
@@ -423,10 +417,10 @@ def _topic_for_input(connection: sqlite3.Connection, topic_or_path: str, exact_p
 def _suggested_synthesis_path(connection: sqlite3.Connection, roots: tuple[str, ...], topic: str) -> str:
     root = roots[0] if roots else "memory/synthesis/"
     base = _safe_stem(topic)
-    candidate = f"{root}{base}.md"
+    candidate = f"{root}{base}.synthesis.md"
     counter = 2
     while _indexed_markdown_path(connection, candidate):
-        candidate = f"{root}{base} {counter}.md"
+        candidate = f"{root}{base}.synthesis {counter}.md"
         counter += 1
     return candidate
 
@@ -445,7 +439,11 @@ def _safe_stem(value: str) -> str:
     return cleaned or "Untitled synthesis"
 
 
-def _synthesis_paths(connection: sqlite3.Connection, roots: tuple[str, ...]) -> tuple[str, ...]:
+def _synthesis_paths(
+    connection: sqlite3.Connection,
+    roots: tuple[str, ...],
+    role_roots,
+) -> tuple[str, ...]:
     paths = {
         row[0]
         for row in connection.execute("SELECT path FROM files WHERE is_markdown = 1 ORDER BY path").fetchall()
@@ -454,7 +452,12 @@ def _synthesis_paths(connection: sqlite3.Connection, roots: tuple[str, ...]) -> 
     return tuple(sorted(paths))
 
 
-def _resolve_synthesis_path(connection: sqlite3.Connection, roots: tuple[str, ...], topic_or_path: str) -> str:
+def _resolve_synthesis_path(
+    connection: sqlite3.Connection,
+    roots: tuple[str, ...],
+    role_roots,
+    topic_or_path: str,
+) -> str:
     row = connection.execute(
         "SELECT path FROM files WHERE is_markdown = 1 AND path = ?",
         (topic_or_path,),
@@ -468,7 +471,7 @@ def _resolve_synthesis_path(connection: sqlite3.Connection, roots: tuple[str, ..
     query = topic_or_path.casefold()
     matches = [
         path
-        for path in _synthesis_paths(connection, roots)
+        for path in _synthesis_paths(connection, roots, role_roots)
         if query in Path(path).stem.casefold()
         or any(query in value.casefold() for value in _metadata(connection, path).get("topic", ()))
     ]

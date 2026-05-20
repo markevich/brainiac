@@ -8,7 +8,7 @@ It is different from development context. Development context is about building 
 
 Jarvis is the operator that uses Brainiac to work with a vault.
 
-Jarvis should:
+ Jarvis should:
 
 - capture raw information;
 - search and retrieve context;
@@ -16,7 +16,7 @@ Jarvis should:
 - detect duplicates;
 - maintain synthesis notes;
 - generate reports/dashboards;
-- write through policy-checked operations.
+- write directly when that is the fastest useful path, then reindex and validate the vault state.
 
 ## Default Workflow
 
@@ -28,7 +28,7 @@ When asked to work with the vault:
 4. If Brainiac tools are not implemented or cannot answer the task, use narrow file reads/searches and avoid scanning the whole vault.
 5. Return compact findings with file paths.
 6. Ask before sensitive writes.
-7. Log writes in `memory/logs/operations.md`.
+7. Log writes in `memory/logs/operations.jsonl`.
 8. When duplicate clusters appear, pick a canonical path for future work before creating new notes.
 
 ## Context Strategy
@@ -55,7 +55,14 @@ Default bias:
 - Generated HTML is a view.
 - SQLite index is a disposable cache.
 - Synthesis notes are maintained summaries, not raw evidence.
+- Synthesis notes are context for retrieval and LLM reasoning, not a default write target for new source notes.
+- Synthesis freshness is tracked separately from semantic duplicate detection: source/source overlaps are maintenance findings; source/synthesis drift is reported as stale synthesis.
 - Raw captures and highlights should remain available as sources.
+- Synthesis notes must not self-reference their own basename in `source_snapshots` or `Sources`; use fully qualified source paths when a basename is ambiguous.
+- Use explicit note roles on every indexed Markdown note: `brainiac_role: source`, `brainiac_role: umbrella`, or `brainiac_role: synthesis`.
+- Archive roots are inert trash-like history and are excluded from Brainiac scanning/indexing.
+- If a maintenance change is uncertain, prefer asking the user before writing.
+- Do not force an approval prompt for every low-risk edit; reserve explicit approval for destructive, irreversible, or ambiguous cleanup writes.
 
 ## Sensitive Domains
 
@@ -110,8 +117,9 @@ When the vault contains duplicate-looking notes:
 4. Keep non-canonical copies as shadow copies unless the user approves cleanup.
 5. If content hashes differ but topic overlap is high, do not auto-merge source notes.
 6. Read the overlapping notes, preserve unique details, and reconcile them through synthesis first.
+7. Do not treat synthesis notes as ordinary semantic duplicate candidates; use `stale_synthesis` to decide when a synthesis note needs refresh.
 
 Default bias:
 
 - exact duplicates -> canonicalize automatically for retrieval and synthesis
-- semantic duplicates -> synthesize first, merge later only with review
+- semantic duplicates -> synthesize/reconcile first, then let Brainiac/LLM draft or directly write the merged note from bounded context, and then validate with scan/report

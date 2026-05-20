@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import closing
 from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,7 +37,6 @@ class _DuplicatePathAssessment:
     role: str | None
     generated_like: bool
     queue_like: bool
-    archive_like: bool
     inbox_like: bool
     outgoing_links: int
     backlinks: int
@@ -49,11 +49,10 @@ class _DuplicatePathAssessment:
         return self.backlinks + self.outgoing_links
 
     @property
-    def sort_key(self) -> tuple[int, int, int, int, float, int, str]:
+    def sort_key(self) -> tuple[int, int, int, float, int, str]:
         return (
             0 if self.generated_like else 1,
             0 if self.queue_like else 1,
-            0 if self.archive_like else 1,
             0 if self.inbox_like else 1,
             float(self.connectivity),
             float(self.mtime),
@@ -123,7 +122,7 @@ def list_exact_duplicate_groups(
 ) -> tuple[ExactDuplicateGroup, ...]:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         role_roots = load_role_roots(routing_config_path)
         rows = connection.execute(
             """
@@ -137,7 +136,13 @@ def list_exact_duplicate_groups(
             """,
             (limit,),
         ).fetchall()
-        return tuple(_duplicate_group(connection, row[0], role_roots) for row in rows)
+        groups = []
+        for row in rows:
+            group = _duplicate_group(connection, row[0], role_roots)
+            if group is None:
+                continue
+            groups.append(group)
+        return tuple(groups)
 
 
 def inspect_duplicates(
@@ -149,11 +154,16 @@ def inspect_duplicates(
 ) -> DuplicateInspection:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
-    with sqlite3.connect(index_path) as connection:
+    with closing(sqlite3.connect(index_path)) as connection:
         role_roots = load_role_roots(routing_config_path)
         exact_group = _resolve_duplicate_group(connection, path_or_group, role_roots)
         seed_path = exact_group.canonical.path if exact_group is not None else _resolve_indexed_path(connection, path_or_group)
-        semantic_candidates = find_duplicates(index_path, _indexed_duplicate_seed(connection, seed_path), limit=max(semantic_limit * 3, 10))
+        semantic_candidates = find_duplicates(
+            index_path,
+            _indexed_duplicate_seed(connection, seed_path),
+            limit=max(semantic_limit * 3, 10),
+            routing_config_path=routing_config_path,
+        )
         excluded_paths = {seed_path}
         if exact_group is not None:
             excluded_paths.update(exact_group.paths)
@@ -171,41 +181,6 @@ def inspect_duplicates(
         )
 
 
-def _canonical_sort_key(
-    path: str,
-    role_roots: tuple[RoleRoot, ...],
-    cache,
-) -> tuple[int, int, int, int, float, int, str]:
-    role = classify_path_role(path, role_roots)
-    archive_like = _contains_folder(path, "archive")
-    generated_like = _contains_folder(path, "generated")
-    queue_like = _contains_folder(path, "queue")
-    inbox_like = role == "inbox"
-    role_rank = {
-        "area": 4,
-        "project": 4,
-        "resource": 4,
-        "unknown": 3,
-        None: 3,
-        "inbox": 2,
-        "synthesis": 2,
-        "queue": 1,
-        "generated": 1,
-        "archive": 0,
-    }.get(role, 3)
-    outgoing, backlinks, mtime = cache(path)
-    return (
-        0 if generated_like else 1,
-        0 if queue_like else 1,
-        0 if archive_like else 1,
-        0 if inbox_like else 1,
-        float(backlinks + outgoing),
-        float(mtime),
-        role_rank,
-        _path_preference(path),
-    )
-
-
 def _assess_duplicate_paths(
     connection: sqlite3.Connection,
     paths: tuple[str, ...],
@@ -217,7 +192,6 @@ def _assess_duplicate_paths(
 
 def _build_assessment(path: str, role_roots: tuple[RoleRoot, ...], cache) -> _DuplicatePathAssessment:
     role = classify_path_role(path, role_roots)
-    archive_like = _contains_folder(path, "archive")
     generated_like = _contains_folder(path, "generated")
     queue_like = _contains_folder(path, "queue")
     inbox_like = role == "inbox"
@@ -228,7 +202,6 @@ def _build_assessment(path: str, role_roots: tuple[RoleRoot, ...], cache) -> _Du
         "queue": 1,
         "inbox": 2,
         "generated": 1,
-        "archive": 0,
         "area": 4,
         "unknown": 3,
         None: 3,
@@ -239,7 +212,6 @@ def _build_assessment(path: str, role_roots: tuple[RoleRoot, ...], cache) -> _Du
         role=role,
         generated_like=generated_like,
         queue_like=queue_like,
-        archive_like=archive_like,
         inbox_like=inbox_like,
         outgoing_links=outgoing,
         backlinks=backlinks,
@@ -262,8 +234,6 @@ def _canonical_reasons(
         reasons.append("preferred over generated paths")
     if not winner.queue_like and any(item.queue_like for item in others):
         reasons.append("preferred over queue-like paths")
-    if not winner.archive_like and any(item.archive_like for item in others):
-        reasons.append("preferred over archive-like paths")
     if not winner.inbox_like and any(item.inbox_like for item in others):
         reasons.append("preferred over inbox paths")
     if winner.connectivity > max(item.connectivity for item in others):
@@ -286,7 +256,7 @@ def _duplicate_group(
     connection: sqlite3.Connection,
     sha256: str,
     role_roots: tuple[RoleRoot, ...],
-) -> ExactDuplicateGroup:
+) -> ExactDuplicateGroup | None:
     rows = connection.execute(
         """
         SELECT path
@@ -297,6 +267,8 @@ def _duplicate_group(
         (sha256,),
     ).fetchall()
     paths = tuple(row[0] for row in rows)
+    if len(paths) < 2:
+        return None
     canonical = canonical_duplicate_details(connection, paths, role_roots)
     return ExactDuplicateGroup(
         group_id=_duplicate_group_id(sha256),

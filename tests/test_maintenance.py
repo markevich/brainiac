@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import sqlite3
 import unittest
+from contextlib import closing
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -9,7 +12,7 @@ from brainiac.maintenance import maintenance_report
 from brainiac.scanner import scan_vault
 
 
-class MaintenanceTest(unittest.TestCase):
+class MaintenanceReportTest(unittest.TestCase):
     def test_reports_meaningful_empty_directories(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -118,7 +121,7 @@ synthesis_roots:
             )
 
             write_index(config.index_path, scan_vault(config))
-            with sqlite3.connect(config.index_path) as connection:
+            with closing(sqlite3.connect(config.index_path)) as connection:
                 source_sha, source_mtime = connection.execute(
                     "SELECT sha256, mtime FROM files WHERE path = ?",
                     ("A/Topic.md",),
@@ -128,7 +131,7 @@ synthesis_roots:
             synthesis_path.write_text(
                 (
                     "---\n"
-                    "brainiac_type: synthesis\n"
+                    "brainiac_role: synthesis\n"
                     "topic: Topic\n"
                     "source_snapshots:\n"
                     f'  - "A/Topic.md|{source_sha}|{source_mtime}"\n'
@@ -152,6 +155,181 @@ synthesis_roots:
             self.assertEqual(len(stale_findings), 1)
             self.assertEqual(stale_findings[0].path, "Brainiac/memory/synthesis/Topic synthesis.md")
             self.assertIn("stale source: A/Topic.md", stale_findings[0].reasons)
+
+    def test_does_not_classify_synthesis_notes_as_semantic_duplicates(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "A").mkdir(parents=True)
+            (vault / "Brainiac" / "memory" / "synthesis").mkdir(parents=True)
+            source_path = vault / "A" / "Topic.md"
+            source_path.write_text("# Topic\n\nVersion one.\n", encoding="utf-8")
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+area_roots:
+  - "A/"
+synthesis_roots:
+  - "Brainiac/memory/synthesis/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            with closing(sqlite3.connect(config.index_path)) as connection:
+                source_sha, source_mtime = connection.execute(
+                    "SELECT sha256, mtime FROM files WHERE path = ?",
+                    ("A/Topic.md",),
+                ).fetchone()
+
+            synthesis_path = vault / "Brainiac" / "memory" / "synthesis" / "Topic synthesis.md"
+            synthesis_path.write_text(
+                (
+                    "---\n"
+                    "brainiac_role: synthesis\n"
+                    "topic: Topic\n"
+                    "source_snapshots:\n"
+                    f'  - "A/Topic.md|{source_sha}|{source_mtime}"\n'
+                    "---\n"
+                    "# Topic synthesis\n\n"
+                    "This is a summary of Topic.\n\n"
+                    "## Sources\n\n"
+                    "[[A/Topic]]\n"
+                ),
+                encoding="utf-8",
+            )
+            source_path.write_text("# Topic\n\nVersion two.\n", encoding="utf-8")
+            write_index(config.index_path, scan_vault(config))
+            report = maintenance_report(config.index_path, config=config, routing_config_path=routing_config)
+
+            semantic_findings = [finding for finding in report.findings if finding.type == "semantic_duplicate"]
+            stale_findings = [finding for finding in report.findings if finding.type == "stale_synthesis"]
+
+            self.assertEqual(report.semantic_duplicate_count, 0)
+            self.assertEqual(len(semantic_findings), 0)
+            self.assertEqual(report.stale_synthesis_count, 1)
+            self.assertEqual(len(stale_findings), 1)
+            self.assertEqual(stale_findings[0].path, "Brainiac/memory/synthesis/Topic synthesis.md")
+
+    def test_does_not_classify_umbrella_list_notes_as_semantic_duplicates(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "A").mkdir(parents=True)
+            source_path = vault / "A" / "Topic.md"
+            source_path.write_text("# Topic\n\nVersion one.\n", encoding="utf-8")
+            umbrella_path = vault / "A" / "Topic list.md"
+            umbrella_path.write_text("# Topic list\n\n- [[Topic]]\n", encoding="utf-8")
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+area_roots:
+  - "A/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            report = maintenance_report(config.index_path, config=config, routing_config_path=routing_config)
+
+            semantic_findings = [finding for finding in report.findings if finding.type == "semantic_duplicate"]
+
+            self.assertEqual(report.semantic_duplicate_count, 0)
+            self.assertEqual(len(semantic_findings), 0)
+
+    def test_archive_excludes_keep_notes_out_of_maintenance(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Archive").mkdir(parents=True)
+            (vault / "Source").mkdir(parents=True)
+            shared = "# Shared\n\nSame content.\n"
+            (vault / "Archive" / "Shared.md").write_text(shared, encoding="utf-8")
+            (vault / "Source" / "Shared.md").write_text(shared, encoding="utf-8")
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+archive_roots:
+  - "Archive/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=("Archive/",),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            report = maintenance_report(config.index_path, config=config, routing_config_path=routing_config)
+
+            self.assertEqual(report.exact_duplicate_count, 0)
+            self.assertEqual(report.semantic_duplicate_count, 0)
+            self.assertTrue(all(finding.path != "Archive/Shared.md" for finding in report.findings))
+
+    def test_reports_notes_missing_explicit_role_markers_and_invalid_values(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Notes").mkdir(parents=True)
+            (vault / "Notes" / "Plain.md").write_text("# Plain\n\nregular source note\n", encoding="utf-8")
+            (vault / "Notes" / "Marked.md").write_text(
+                "---\nBrainiac_Role: source\n---\n# Marked\n\nregular source note\n",
+                encoding="utf-8",
+            )
+            (vault / "Notes" / "Broken role.md").write_text(
+                "---\nbrainiac_role: banana\n---\n# Broken role\n\nregular source note\n",
+                encoding="utf-8",
+            )
+            (vault / "Notes" / "Master list.md").write_text(
+                "# Master list\n\n- [[Topic One]]\n- [[Topic Two]]\n",
+                encoding="utf-8",
+            )
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text("", encoding="utf-8")
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            report = maintenance_report(config.index_path, config=config, routing_config_path=routing_config)
+
+            missing_role = [finding for finding in report.findings if finding.type == "missing_role_marker"]
+            invalid_role = [finding for finding in report.findings if finding.type == "invalid_role_marker"]
+
+            self.assertEqual(report.missing_role_marker_count, 2)
+            self.assertEqual(report.invalid_role_marker_count, 1)
+            self.assertEqual(
+                {finding.path for finding in missing_role},
+                {"Notes/Plain.md", "Notes/Master list.md"},
+            )
+            self.assertEqual([finding.path for finding in invalid_role], ["Notes/Broken role.md"])
+            self.assertTrue(any("master list/index note" in " ".join(finding.reasons) for finding in missing_role))
+            self.assertTrue(any("default role: source" in finding.reasons for finding in missing_role))
 
     def test_aggregates_ambiguous_missing_links_and_unconfigured_profiles(self):
         with TemporaryDirectory() as tmp:
@@ -202,6 +380,3 @@ area_roots:
             self.assertIn("does not resolve", missing[0].reasons[0])
             self.assertEqual(unconfigured[0].path, "2_Areas/Music/")
             self.assertIn("indexed Markdown notes", unconfigured[0].reasons[0])
-
-if __name__ == "__main__":
-    unittest.main()

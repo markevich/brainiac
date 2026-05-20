@@ -7,7 +7,11 @@ Synthesis notes are derived memory. They summarize current understanding, but ra
 Synthesis notes can be discovered in either way:
 
 - placed under a configured `synthesis_roots` path in `config/routing.yml`;
-- marked with frontmatter `brainiac_type: synthesis`.
+- marked with frontmatter `brainiac_role: synthesis`.
+
+Recommended naming:
+
+- use a stable `.synthesis.md` suffix for new synthesis notes so they stay out of the ordinary source-note basename namespace.
 
 ## Frontmatter
 
@@ -15,7 +19,7 @@ Recommended minimal frontmatter:
 
 ```yaml
 ---
-brainiac_type: synthesis
+brainiac_role: synthesis
 topic: Example topic
 last_reviewed: 2026-05-11
 source_snapshots:
@@ -24,6 +28,13 @@ source_snapshots:
 ```
 
 `source_snapshots` is optional. When present, Brainiac compares the stored SHA-256 with the current indexed source hash and reports stale synthesis notes.
+
+Lifecycle rule:
+
+- source notes change first;
+- `synthesis stale` reports the affected synthesis note;
+- a refresh or rewrite brings the synthesis note back in sync;
+- semantic duplicate detection is for source/source overlap, not source/synthesis freshness drift.
 
 ## Body
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import re
 import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
@@ -10,8 +12,15 @@ from .duplicates import list_exact_duplicate_groups
 from .routing import load_routing_config
 from .scanner import walk_source_files
 from .structure import analyze_structure
-from .synthesis import stale_synthesis_notes
-from .vault_roles import RoleRoot, classify_path_role, load_role_roots
+from .synthesis import is_synthesis_path, stale_synthesis_notes
+from .vault_roles import (
+    RoleRoot,
+    classify_note_role,
+    classify_path_role,
+    has_explicit_role_marker,
+    invalid_explicit_role_marker_values,
+    load_role_roots,
+)
 
 
 TOOLING_SEGMENTS = {
@@ -23,6 +32,7 @@ TOOLING_SEGMENTS = {
     ".hg",
     ".svn",
 }
+WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
 
 
 @dataclass(frozen=True)
@@ -63,6 +73,33 @@ class MaintenanceReport:
     @property
     def unconfigured_profile_count(self) -> int:
         return sum(1 for finding in self.findings if finding.type == "unconfigured_structure_profile")
+
+    @property
+    def semantic_duplicate_count(self) -> int:
+        return sum(1 for finding in self.findings if finding.type == "semantic_duplicate")
+
+    @property
+    def missing_role_marker_count(self) -> int:
+        return sum(1 for finding in self.findings if finding.type == "missing_role_marker")
+
+    @property
+    def invalid_role_marker_count(self) -> int:
+        return sum(1 for finding in self.findings if finding.type == "invalid_role_marker")
+
+
+@dataclass(frozen=True)
+class _SemanticDocument:
+    path: str
+    title_key: str
+    terms: frozenset[str]
+    sha256: str
+
+
+@dataclass(frozen=True)
+class _SemanticCandidate:
+    path: str
+    score: int
+    reasons: tuple[str, ...]
 
 
 def maintenance_report(
@@ -106,6 +143,9 @@ def maintenance_report(
         findings.extend(_ambiguous_wikilink_findings(connection))
         findings.extend(_missing_wikilink_findings(connection))
         findings.extend(_unconfigured_profile_findings(index_path, routing_config_path))
+        findings.extend(_invalid_role_marker_findings(index_path))
+        findings.extend(_missing_role_marker_findings(index_path, routing_config_path))
+        findings.extend(_semantic_duplicate_findings(index_path, routing_config_path))
     ordered = tuple(sorted(findings, key=lambda item: (_severity_rank(item.severity), item.path)))
     return MaintenanceReport(findings=ordered)
 
@@ -243,6 +283,252 @@ def _unconfigured_profile_findings(
     return tuple(findings)
 
 
+def _invalid_role_marker_findings(index_path: Path) -> tuple[MaintenanceFinding, ...]:
+    findings: list[MaintenanceFinding] = []
+    with closing(sqlite3.connect(index_path)) as connection:
+        rows = connection.execute(
+            """
+            SELECT path
+            FROM search_index
+            ORDER BY path
+            """
+        ).fetchall()
+        for (path,) in rows:
+            invalid_values = invalid_explicit_role_marker_values(connection, path)
+            if not invalid_values:
+                continue
+            findings.append(
+                MaintenanceFinding(
+                    id=f"invalid_role_marker:{path}",
+                    type="invalid_role_marker",
+                    severity="medium",
+                    path=path,
+                    summary="Invalid explicit role marker",
+                    reasons=(
+                        f"unsupported brainiac_role value(s): {', '.join(invalid_values)}",
+                        "valid values: source, umbrella, synthesis",
+                    ),
+                    suggested_action="Replace brainiac_role with one of: source, umbrella, synthesis.",
+                )
+            )
+    return tuple(findings)
+
+
+def _missing_role_marker_findings(
+    index_path: Path,
+    routing_config_path: Path,
+) -> tuple[MaintenanceFinding, ...]:
+    findings: list[MaintenanceFinding] = []
+    role_roots = load_role_roots(routing_config_path)
+    with closing(sqlite3.connect(index_path)) as connection:
+        rows = connection.execute(
+            """
+            SELECT path, title, headings, tags, tasks, body
+            FROM search_index
+            ORDER BY path
+            """
+        ).fetchall()
+        for path, title, headings, tags, tasks, body in rows:
+            if has_explicit_role_marker(connection, path):
+                continue
+            note_role = classify_note_role(connection, path, role_roots)
+            umbrella_like = _is_umbrella_like_note(title, headings, tags, tasks, body)
+            if umbrella_like:
+                role_hint = "umbrella"
+            elif note_role == "synthesis":
+                role_hint = note_role
+            else:
+                role_hint = "source"
+            reasons = [f"no explicit brainiac_role marker on {path}"]
+            if note_role == "synthesis":
+                reasons.append(f"inferred role: {note_role}")
+            if umbrella_like:
+                reasons.append("note is list-like and may be a master list/index note")
+            elif role_hint == "source":
+                reasons.append("default role: source")
+            findings.append(
+                MaintenanceFinding(
+                    id=f"missing_role_marker:{path}",
+                    type="missing_role_marker",
+                    severity="medium" if role_hint in {"synthesis", "umbrella"} else "low",
+                    path=path,
+                    summary="Missing explicit role marker",
+                    reasons=tuple(reasons),
+                    suggested_action=f"Add brainiac_role: {role_hint or 'source'} to frontmatter.",
+                )
+            )
+    return tuple(findings)
+
+
+def _semantic_duplicate_findings(
+    index_path: Path,
+    routing_config_path: Path,
+) -> tuple[MaintenanceFinding, ...]:
+    findings: list[MaintenanceFinding] = []
+    routing_config = load_routing_config(routing_config_path)
+    role_roots = load_role_roots(routing_config_path)
+    synthesis_roots = tuple(root.path for root in role_roots if root.role == "synthesis")
+    seen_pairs: set[tuple[str, str]] = set()
+    with closing(sqlite3.connect(index_path)) as connection:
+        rows = connection.execute(
+            """
+            SELECT search_index.path, title, headings, tags, tasks, body, files.sha256
+            FROM search_index
+            JOIN files ON files.path = search_index.path
+            ORDER BY search_index.path
+            """
+        ).fetchall()
+        documents: list[_SemanticDocument] = []
+        for path, title, headings, tags, tasks, body, sha256 in rows:
+            note_role = classify_note_role(connection, path, role_roots)
+            if (
+                _is_internal_brainiac_artifact(path)
+                or note_role in {"synthesis", "umbrella"}
+                or is_synthesis_path(connection, path, synthesis_roots)
+            ):
+                continue
+            if note_role == "source" and _is_umbrella_like_note(title, headings, tags, tasks, body):
+                continue
+            documents.append(
+                _SemanticDocument(
+                    path=path,
+                    title_key=_semantic_title_key(title or "", routing_config.important_terms),
+                    terms=frozenset(
+                        _semantic_terms(
+                            " ".join(value or "" for value in (path, title, headings, tags, tasks, body)),
+                            routing_config.important_terms,
+                            routing_config.stopwords,
+                        )
+                    ),
+                    sha256=sha256,
+                )
+            )
+
+        by_path = {document.path: document for document in documents}
+        by_title: dict[str, set[str]] = {}
+        by_term: dict[str, set[str]] = {}
+        for document in documents:
+            if document.title_key:
+                by_title.setdefault(document.title_key, set()).add(document.path)
+            for term in document.terms:
+                by_term.setdefault(term, set()).add(document.path)
+        high_frequency_limit = min(200, max(25, len(documents) // 20))
+
+        for document in documents:
+            candidate_paths: set[str] = set()
+            if document.title_key:
+                candidate_paths.update(by_title.get(document.title_key, set()))
+            for term in document.terms:
+                term_paths = by_term.get(term, set())
+                if len(term_paths) <= high_frequency_limit or term in routing_config.important_terms:
+                    candidate_paths.update(term_paths)
+            candidates = sorted(
+                (
+                    _score_semantic_candidate(document, by_path[candidate_path])
+                    for candidate_path in candidate_paths
+                    if candidate_path != document.path
+                    and candidate_path in by_path
+                    and by_path[candidate_path].sha256 != document.sha256
+                ),
+                key=lambda candidate: (-candidate.score, candidate.path),
+            )
+            for candidate in candidates[:3]:
+                if candidate.score < 55:
+                    continue
+                pair = tuple(sorted((document.path, candidate.path)))
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+                findings.append(
+                    MaintenanceFinding(
+                        id=f"semantic_duplicate:{hashlib.sha1('|'.join(pair).encode('utf-8')).hexdigest()[:12]}",
+                        type="semantic_duplicate",
+                        severity="low",
+                        path=pair[0],
+                        summary=f"Semantic duplicate candidate ({pair[1]})",
+                        reasons=tuple(dict.fromkeys((f"similar note: {candidate.path}",) + candidate.reasons)),
+                        suggested_action="Review both notes, synthesize first, then consider retirement or merge with review.",
+                    )
+                )
+                break
+    return tuple(findings)
+
+
+def _score_semantic_candidate(seed: _SemanticDocument, candidate: _SemanticDocument) -> _SemanticCandidate:
+    reasons: list[str] = []
+    score = 0
+    if seed.title_key and seed.title_key == candidate.title_key:
+        score += 70
+        reasons.append("same title")
+    if seed.title_key and seed.title_key == Path(candidate.path).stem.casefold():
+        score += 50
+        reasons.append("same note name")
+    overlap = seed.terms & candidate.terms
+    if overlap:
+        coefficient = len(overlap) / max(1, min(len(seed.terms), len(candidate.terms)))
+        score += min(60, round(coefficient * 100))
+        reasons.append(f"shared terms: {', '.join(sorted(overlap)[:5])}")
+    return _SemanticCandidate(path=candidate.path, score=score, reasons=tuple(dict.fromkeys(reasons)))
+
+
+def _semantic_title_key(title: str, important_terms: frozenset[str]) -> str:
+    return " ".join(sorted(_semantic_terms(title, important_terms, frozenset()))).casefold()
+
+
+def _semantic_terms(
+    text: str,
+    important_terms: frozenset[str],
+    stopwords: frozenset[str],
+) -> set[str]:
+    return {
+        token.casefold().strip("-_/")
+        for token in WORD_RE.findall(text)
+        if _keep_semantic_token(token, important_terms, stopwords)
+    }
+
+
+def _keep_semantic_token(
+    token: str,
+    important_terms: frozenset[str],
+    stopwords: frozenset[str],
+) -> bool:
+    normalized = token.casefold().strip("-_/")
+    if normalized in important_terms:
+        return True
+    if normalized in stopwords:
+        return False
+    return len(normalized) > 2
+
+
+def _is_internal_brainiac_artifact(path: str) -> bool:
+    return path.startswith("Brainiac/memory/")
+
+
+def _is_umbrella_like_note(title: str, headings: str, tags: str, tasks: str, body: str) -> bool:
+    text = "\n".join(part for part in (title, headings, tags, tasks, body) if part)
+    if "[[" not in text:
+        return False
+    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    if not lines:
+        return False
+    prose_lines = 0
+    link_lines = 0
+    for line in lines:
+        if line.startswith("#"):
+            continue
+        if line.startswith(("-", "*", "+")) and "[[" in line:
+            link_lines += 1
+            continue
+        if re.fullmatch(r"\[\[[^\]]+\]\]", line):
+            link_lines += 1
+            continue
+        prose_lines += 1
+    if prose_lines > 1 or link_lines == 0:
+        return False
+    word_count = len(WORD_RE.findall(text.replace("[[", " ").replace("]]", " ")))
+    return word_count <= 20
+
+
 def _empty_directory_findings(
     connection: sqlite3.Connection,
     config: VaultConfig,
@@ -328,11 +614,6 @@ def _empty_directory_finding(
         summary = f"Empty {role} directory"
         reasons.append(f"directory sits under the {role} role")
         suggested_action = "Delete if abandoned, or add the source notes that should live here."
-    elif role == "archive":
-        severity = "low"
-        summary = "Empty archive directory"
-        reasons.append("directory sits under the archive role")
-        suggested_action = "Delete if it is only leftover structure."
     elif role in {"generated", "queue", "synthesis"}:
         return None
     elif _looks_user_facing(dir_key):

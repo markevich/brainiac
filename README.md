@@ -80,7 +80,11 @@ PYTHONPATH=src python3 -m brainiac synthesis suggest "topic"
 
 `route` and `find-duplicates` are dry-run helpers. They suggest destinations, likely overlaps, and safe note/link names, but they do not write to the vault.
 `duplicates list` and `duplicates inspect` are read-only maintenance diagnostics. They show exact duplicate clusters, the current canonical candidate, why that path wins, and separate semantic duplicate ideas from exact duplicate groups.
-`maintenance report` is a read-only defect report layer. It currently aggregates meaningful empty directories, exact duplicate clusters, stale synthesis notes, missing wikilinks, ambiguous wikilinks, and unconfigured structure profiles into one maintenance finding model, using ignore rules plus role/structure semantics.
+`maintenance report` is a read-only defect report layer. It currently aggregates meaningful empty directories, exact duplicate clusters, stale synthesis notes, missing wikilinks, ambiguous wikilinks, unconfigured structure profiles, and semantic duplicate candidates into one maintenance finding model, using ignore rules plus role/structure semantics.
+The preferred maintenance loop is simpler: `maintenance report` or targeted inspection, LLM-authored edits, then `scan` and `report` again to validate the vault state.
+When a maintenance change is uncertain, ask the user before writing; destructive or ambiguous cleanup should not be applied silently.
+Brainiac now treats note roles explicitly: `source` is the default user-content role, `umbrella` is a master list/index note, and `synthesis` is derived memory. Configured archive roots are inert trash and are excluded from the index.
+Every indexed Markdown note should carry an explicit `brainiac_role` marker. Maintenance flags notes missing one and suggests the likely role to add.
 `structure` analyzes configured vault roles and profiles, then reports unconfigured areas/projects/resources that may need routing coverage.
 `synthesis` commands treat synthesis notes as derived memory over raw sources. They list synthesis notes, inspect source references, report stale notes when source snapshots no longer match the current index, and dry-run draft synthesis notes without writing to the vault.
 

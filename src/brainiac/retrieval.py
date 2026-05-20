@@ -54,10 +54,17 @@ class RelatedResult:
     reasons: tuple[str, ...]
 
 
-def inspect_path(index_path: Path, note_path: str) -> Inspection:
+def inspect_path(
+    index_path: Path,
+    note_path: str,
+    *,
+    routing_config_path: Path = Path("config/routing.yml"),
+) -> Inspection:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     with closing(sqlite3.connect(index_path)) as connection:
+        role_roots = load_role_roots(routing_config_path)
+        synthesis_roots = _role_paths(role_roots, "synthesis")
         file_row = connection.execute(
             """
             SELECT path, size_bytes, is_empty_note
@@ -116,9 +123,9 @@ def inspect_path(index_path: Path, note_path: str) -> Inspection:
                 (note_path, note_path),
             ).fetchall()
         )
-        synthesis_references = synthesis_references_for_source(connection, note_path)
+        synthesis_references = synthesis_references_for_source(connection, note_path, synthesis_roots)
         exact_duplicates = exact_duplicate_paths(connection, note_path)
-        canonical_path = canonical_duplicate_path(connection, note_path, load_role_roots(Path("config/routing.yml")))
+        canonical_path = canonical_duplicate_path(connection, note_path, role_roots)
 
     return Inspection(
         path=file_row[0],
@@ -183,6 +190,7 @@ def related_paths(
             raise FileNotFoundError(f"Path not found in index: {note_path}")
 
         role_roots = load_role_roots(routing_config_path)
+        synthesis_roots = _role_paths(role_roots, "synthesis")
         note_role = classify_path_role(note_path, role_roots)
         note_canonical_path = canonical_duplicate_path(connection, note_path, role_roots)
         scores: dict[str, int] = {}
@@ -226,7 +234,7 @@ def related_paths(
         ).fetchall():
             add(file_path[0], 90, "backlink")
 
-        for synthesis_path in synthesis_references_for_source(connection, note_path):
+        for synthesis_path in synthesis_references_for_source(connection, note_path, synthesis_roots):
             add(synthesis_path, 110, "synthesis reference")
 
         note_tags = {
@@ -282,7 +290,7 @@ def related_paths(
                 overlap = source_terms & _search_terms((title, headings, tags))
                 if len(overlap) >= 2:
                     score = min(len(overlap), 4) * 8
-                    if is_synthesis_path(connection, path):
+                    if is_synthesis_path(connection, path, synthesis_roots):
                         score += 25
                     candidate_role = classify_path_role(path, role_roots)
                     if note_role and candidate_role and note_role == candidate_role:
@@ -313,6 +321,10 @@ def _link_rows(rows) -> tuple[LinkInfo, ...]:
         )
         for file_path, line, target, resolution_status, resolved_path, preferred_path, candidate_paths in rows
     )
+
+
+def _role_paths(role_roots, role: str) -> tuple[str, ...]:
+    return tuple(root.path for root in role_roots if root.role == role)
 
 
 def _search_terms(row) -> set[str]:

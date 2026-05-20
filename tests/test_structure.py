@@ -89,6 +89,35 @@ sensitive_path_prefixes:
                 analysis.recommendations,
             )
 
+    def test_ignores_archive_roots_from_structure_reporting(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Archive").mkdir(parents=True)
+            (vault / "Archive" / "Old.md").write_text("# Old\n", encoding="utf-8")
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+archive_roots:
+  - "Archive/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            analysis = analyze_structure(config.index_path, routing_config)
+
+            self.assertEqual(analysis.profiles, ())
+            self.assertEqual(analysis.unconfigured_profiles, ())
+
 
 if __name__ == "__main__":
     unittest.main()

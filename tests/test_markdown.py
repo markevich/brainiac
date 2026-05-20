@@ -41,7 +41,7 @@ tags:
   - "#project/brainiac"
 aliases:
   - not-a-tag
-brainiac_type: synthesis
+brainiac_role: synthesis
 topic: Brainiac retrieval
 ---
 
@@ -65,7 +65,7 @@ Text #real/tag
             [(1, "Real Heading", 17)],
         )
         self.assertEqual(facts.wikilinks, ())
-        self.assertEqual(facts.frontmatter["brainiac_type"], ("synthesis",))
+        self.assertEqual(facts.frontmatter["brainiac_role"], ("synthesis",))
         self.assertEqual(facts.frontmatter["topic"], ("Brainiac retrieval",))
         self.assertEqual(facts.frontmatter["aliases"], ("not-a-tag",))
 

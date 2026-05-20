@@ -146,6 +146,41 @@ Other text.
             )
             self.assertEqual(inspection.canonical_path, "2_Areas/Work/Shared.md")
 
+    def test_inspect_and_related_use_routing_config_for_synthesis_roots(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Sources").mkdir(parents=True)
+            (vault / "Generated" / "Synthesis").mkdir(parents=True)
+            (vault / "Sources" / "Raw.md").write_text("# Raw\n\nEvidence.\n", encoding="utf-8")
+            (vault / "Generated" / "Synthesis" / "Raw summary.md").write_text(
+                "# Raw summary\n\n[[Sources/Raw]]\n",
+                encoding="utf-8",
+            )
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+synthesis_roots:
+  - "Generated/Synthesis/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            inspection = inspect_path(config.index_path, "Sources/Raw.md", routing_config_path=routing_config)
+            related = related_paths(config.index_path, "Sources/Raw.md", routing_config_path=routing_config)
+
+            self.assertEqual(inspection.synthesis_references, ("Generated/Synthesis/Raw summary.md",))
+            self.assertEqual(related[0].path, "Generated/Synthesis/Raw summary.md")
+            self.assertIn("synthesis reference", related[0].reasons)
 
 if __name__ == "__main__":
     unittest.main()

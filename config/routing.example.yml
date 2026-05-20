@@ -24,9 +24,6 @@ queue:
 generated:
   root: "Brainiac/memory/generated/"
 
-archive:
-  root: "Archive/"
-
 inbox_roots:
   - "Inbox/"
 

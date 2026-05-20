@@ -1,10 +1,12 @@
 import sqlite3
 import unittest
+from contextlib import closing
 from os import utime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from brainiac.config import VaultConfig
+from brainiac.cli import main
 from brainiac.index import write_index
 from brainiac.report import write_inventory_report
 from brainiac.scanner import scan_vault
@@ -42,7 +44,7 @@ class ScanTest(unittest.TestCase):
             report_path = config.generated_root / "reports" / "inventory.md"
             write_inventory_report(config.index_path, report_path)
 
-            with sqlite3.connect(config.index_path) as connection:
+            with closing(sqlite3.connect(config.index_path)) as connection:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM files").fetchone()[0], 2)
                 self.assertEqual(
                     connection.execute("SELECT COUNT(*) FROM markdown_headings").fetchone()[0], 2
@@ -80,6 +82,63 @@ class ScanTest(unittest.TestCase):
             self.assertIn("Missing", report)
             self.assertIn("follow up", report)
 
+    def test_cli_scan_excludes_archive_roots_from_routing_config(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Archive").mkdir(parents=True)
+            (vault / "Notes").mkdir()
+            (vault / "Archive" / "Old.md").write_text("# Old\n\narchive copy\n", encoding="utf-8")
+            (vault / "Notes" / "Active.md").write_text("# Active\n\nsource copy\n", encoding="utf-8")
+            vault_config = tmp_path / "vault.yml"
+            index_path = tmp_path / "brainiac.sqlite"
+            generated_root = tmp_path / "generated"
+            vault_config.write_text(
+                f"""
+vault:
+  name: "Test vault"
+  root: "{vault.as_posix()}"
+
+exclude:
+  - ".obsidian/"
+
+source_formats:
+  markdown:
+    - "*.md"
+
+generated_paths:
+  root: "{generated_root.as_posix()}"
+
+index:
+  path: "{index_path.as_posix()}"
+""",
+                encoding="utf-8",
+            )
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+archive_roots:
+  - "Archive/"
+""",
+                encoding="utf-8",
+            )
+
+            exit_code = main(
+                [
+                    "--config",
+                    vault_config.as_posix(),
+                    "scan",
+                    "--routing-config",
+                    routing_config.as_posix(),
+                    "--no-report",
+                ]
+            )
+
+            self.assertEqual(exit_code, 0)
+            with closing(sqlite3.connect(index_path)) as connection:
+                paths = connection.execute("SELECT path FROM files ORDER BY path").fetchall()
+            self.assertEqual(paths, [("Notes/Active.md",)])
+
     def test_wikilink_resolution_leaves_ambiguous_stems_unresolved(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -102,7 +161,7 @@ class ScanTest(unittest.TestCase):
             result = scan_vault(config)
             write_index(config.index_path, result)
 
-            with sqlite3.connect(config.index_path) as connection:
+            with closing(sqlite3.connect(config.index_path)) as connection:
                 rows = connection.execute(
                     """
                     SELECT target, resolved_path, preferred_path, is_resolved, resolution_status, candidate_paths
@@ -153,7 +212,7 @@ class ScanTest(unittest.TestCase):
             self.assertEqual(second.changed_paths, ("Folder/Duplicate.md",))
             self.assertEqual(second.deleted_paths, ("Duplicate.md",))
 
-            with sqlite3.connect(config.index_path) as connection:
+            with closing(sqlite3.connect(config.index_path)) as connection:
                 files = connection.execute("SELECT path FROM files ORDER BY path").fetchall()
                 link = connection.execute(
                     """
@@ -194,7 +253,7 @@ class ScanTest(unittest.TestCase):
             self.assertEqual(second.meta["changed_file_count"], "1")
             self.assertEqual(second.markdown_refresh_paths, ())
 
-            with sqlite3.connect(config.index_path) as connection:
+            with closing(sqlite3.connect(config.index_path)) as connection:
                 headings = connection.execute(
                     "SELECT COUNT(*) FROM markdown_headings WHERE file_path = 'Topic.md'"
                 ).fetchone()[0]

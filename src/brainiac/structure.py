@@ -50,6 +50,7 @@ def analyze_structure(
         destination.path for destination in routing_config.destinations if destination.path.endswith("/")
     }
     role_roots = load_role_roots(routing_config_path)
+    configured_paths |= {root.path for root in role_roots}
 
     with closing(sqlite3.connect(index_path)) as connection:
         markdown_paths = _markdown_paths(connection)
@@ -106,7 +107,7 @@ def _profiles(
 
 
 def _profile_paths(connection: sqlite3.Connection, root: RoleRoot) -> tuple[str, ...]:
-    if root.role in {"inbox", "generated", "queue", "synthesis", "archive"}:
+    if root.role in {"inbox", "generated", "queue", "synthesis"}:
         return (root.path,)
     child_dirs = set()
     direct_files = set()

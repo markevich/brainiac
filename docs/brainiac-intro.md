@@ -53,6 +53,15 @@ A Markdown note that is treated as primary evidence or working memory.
 Source notes are truth.
 They are not derived summaries.
 
+Source notes are the default note role, and they should still be marked explicitly with `brainiac_role: source`.
+
+### Umbrella Note
+
+A Markdown master list or index note that points at several source notes.
+
+Umbrella notes are ordinary user notes with an explicit `brainiac_role: umbrella` frontmatter marker.
+They can be used for navigation and aggregation, but they are not derived memory.
+
 ### Index
 
 A disposable SQLite cache built from the vault.
@@ -112,6 +121,17 @@ It should contain things like:
 - source snapshots
 
 Synthesis notes are how Brainiac avoids re-synthesizing the same topic from scratch every time.
+They are context, not a default write target for new source notes.
+
+Synthesis notes should be marked explicitly, for example with `brainiac_role: synthesis`.
+
+### Archive Root
+
+A configured folder that belongs to inert historical storage.
+
+Archive roots are trash-like history. Brainiac excludes them from scanning and indexing, so archive files do not appear in normal search, routing, duplicates, synthesis, or maintenance.
+
+Brainiac expects every indexed Markdown note to carry an explicit `brainiac_role` marker and can surface notes that do not.
 
 ### Generated Artifact
 
@@ -177,6 +197,7 @@ If two notes overlap in meaning but not in content:
 - read both
 - preserve unique details
 - reconcile via synthesis first
+- compare source notes against source notes; synthesis notes are handled separately as derived memory freshness, not as ordinary duplicate candidates
 - only then propose merge or cleanup
 
 ## Synthesis Strategy
@@ -189,6 +210,7 @@ Good synthesis behavior:
 - prefer strong sources over weak lexical mentions
 - update synthesis when source evidence changes
 - treat synthesis as the first context layer for future work
+- let stale synthesis be detected from source snapshot mismatch, not from semantic duplicate detection
 
 Bad synthesis behavior:
 
@@ -233,6 +255,7 @@ Should usually require review:
 - rewriting existing links toward canonical targets
 - deleting duplicate notes
 - merging semantic duplicates
+- retiring duplicate source notes after synthesis reconciliation
 - rewriting canonical notes
 - moving large note sets
 - modifying sensitive notes
@@ -255,6 +278,6 @@ If a new chat remembers only a few things, they should be these:
 2. source notes are truth
 3. synthesis notes are derived memory
 4. exact duplicates should be canonicalized automatically for retrieval
-5. semantic duplicates should usually go through synthesis before cleanup
+5. semantic duplicates should usually go through synthesis or reconciliation before cleanup
 6. use bounded retrieval before reading files
 7. use LLM reasoning only after Python narrowed the evidence set

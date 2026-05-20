@@ -56,6 +56,44 @@ inbox:
             self.assertEqual(duplicates[0].path, "2_Areas/Food/Fermentation.md")
             self.assertIn("same title", duplicates[0].reasons)
 
+    def test_archive_section_is_not_a_route_destination(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Notes").mkdir(parents=True)
+            (vault / "Notes" / "Status.md").write_text("# Status\n\nsource copy\n", encoding="utf-8")
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+areas:
+  notes: "Notes/"
+archive:
+  old: "Archive/"
+archive_roots:
+  - "Archive/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+
+            route = route_content(
+                config.index_path,
+                routing_config,
+                "# Status\n\nsource copy",
+                limit=5,
+            )
+
+            self.assertEqual([candidate.destination.section for candidate in route.candidates], ["areas"])
+
     def test_create_suggestion_uses_shortest_unique_link(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -83,11 +121,17 @@ areas:
 
             write_index(config.index_path, scan_vault(config))
 
-            route = route_content(config.index_path, routing_config, "# New Status\n\nstatus update", limit=1)
+            route = route_content(
+                config.index_path,
+                routing_config,
+                "# New Status\n\n- [[Topic One]]\n- [[Topic Two]]",
+                limit=1,
+            )
 
             self.assertEqual(route.candidates[0].suggestion.action, "create")
             self.assertEqual(route.candidates[0].suggestion.path, "A/New Status.md")
             self.assertEqual(route.candidates[0].suggestion.link, "[[New Status]]")
+            self.assertIn("suggested frontmatter role: umbrella", route.candidates[0].suggestion.reasons)
 
     def test_existing_collision_uses_path_link_for_ambiguous_basename(self):
         with TemporaryDirectory() as tmp:
@@ -119,6 +163,45 @@ areas:
             route = route_content(config.index_path, routing_config, "# Status\n\nstatus update", limit=1)
 
             self.assertEqual(route.candidates[0].suggestion.action, "review")
+            self.assertEqual(route.candidates[0].suggestion.path, "A/Status.md")
+            self.assertEqual(route.candidates[0].suggestion.link, "[[A/Status]]")
+            self.assertIn("suggested frontmatter role: source", route.candidates[0].suggestion.reasons)
+
+    def test_synthesis_notes_do_not_act_as_write_targets_for_routing(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "A").mkdir(parents=True)
+            (vault / "Brainiac" / "memory" / "synthesis").mkdir(parents=True)
+            (vault / "Brainiac" / "memory" / "synthesis" / "Status.md").write_text(
+                "---\nbrainiac_role: synthesis\ntopic: Status\n---\n# Status\n",
+                encoding="utf-8",
+            )
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+areas:
+  status: "A/"
+synthesis_roots:
+  - "Brainiac/memory/synthesis/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+
+            route = route_content(config.index_path, routing_config, "# Status\n\nnew source note", limit=1)
+
+            self.assertEqual(route.candidates[0].destination.key, "status")
+            self.assertEqual(route.candidates[0].suggestion.action, "create")
             self.assertEqual(route.candidates[0].suggestion.path, "A/Status.md")
             self.assertEqual(route.candidates[0].suggestion.link, "[[A/Status]]")
 

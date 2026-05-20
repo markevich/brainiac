@@ -16,6 +16,7 @@ from .scanner import scan_vault
 from .search import search_index
 from .structure import analyze_structure
 from .synthesis import inspect_synthesis, list_synthesis_notes, stale_synthesis_notes, suggest_synthesis
+from .vault_roles import load_archive_roots
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -32,6 +33,12 @@ def main(argv: list[str] | None = None) -> int:
     scan_parser.add_argument("--vault-root", type=Path, help="Override vault root from config.")
     scan_parser.add_argument("--index", type=Path, help="Override SQLite index output path.")
     scan_parser.add_argument("--report", type=Path, help="Inventory report output path.")
+    scan_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config. Archive roots are excluded from scanning.",
+    )
     scan_parser.add_argument("--no-report", action="store_true", help="Skip inventory report generation.")
     scan_parser.add_argument(
         "--full-rebuild",
@@ -48,11 +55,23 @@ def main(argv: list[str] | None = None) -> int:
     search_parser = subparsers.add_parser("search", help="Search the existing vault index.")
     search_parser.add_argument("query", help="Search query.")
     search_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    search_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
     search_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect one indexed vault path.")
     inspect_parser.add_argument("path", help="Vault-relative path to inspect.")
     inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    inspect_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
 
     read_parser = subparsers.add_parser("read", help="Read one indexed vault path.")
     read_parser.add_argument("path", help="Vault-relative path to read.")
@@ -75,6 +94,12 @@ def main(argv: list[str] | None = None) -> int:
     index_subparsers = index_parser.add_subparsers(dest="index_command", required=True)
     index_info_parser = index_subparsers.add_parser("info", help="Show index metadata and optional filesystem drift.")
     index_info_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    index_info_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config. Archive roots are excluded from filesystem checks.",
+    )
     index_info_parser.add_argument(
         "--check-filesystem",
         action="store_true",
@@ -100,6 +125,12 @@ def main(argv: list[str] | None = None) -> int:
     duplicates_parser.add_argument("content", nargs="?", help="Content to compare. Use --file for longer input.")
     duplicates_parser.add_argument("--file", type=Path, help="Read content to compare from a file.")
     duplicates_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
+    duplicates_parser.add_argument(
+        "--routing-config",
+        type=Path,
+        default=Path("config/routing.yml"),
+        help="Path to Brainiac routing config.",
+    )
     duplicates_parser.add_argument("--limit", type=int, default=5, help="Maximum number of results.")
 
     duplicates_maintenance_parser = subparsers.add_parser(
@@ -142,7 +173,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Maximum number of semantic duplicate ideas to print.",
     )
 
-    maintenance_parser = subparsers.add_parser("maintenance", help="Read-only vault maintenance diagnostics.")
+    maintenance_parser = subparsers.add_parser(
+        "maintenance",
+        help="Vault maintenance diagnostics.",
+    )
     maintenance_subparsers = maintenance_parser.add_subparsers(dest="maintenance_command", required=True)
     maintenance_report_parser = maintenance_subparsers.add_parser(
         "report",
@@ -254,6 +288,7 @@ def main(argv: list[str] | None = None) -> int:
 def _scan(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     config = _resolve_vault_config(config, args.vault_root, tuple(args.exclude))
+    config = _with_archive_excludes(config, args.routing_config)
     index_path = args.index or config.index_path
     report_path = args.report or (config.generated_root / "reports" / "inventory.md")
 
@@ -292,6 +327,12 @@ def _resolve_vault_config(config, vault_root_arg: Path | None, excludes: tuple[s
     return with_vault_overrides(config, root=vault_root, exclude=config.exclude + normalized_excludes + extra_excludes)
 
 
+def _with_archive_excludes(config, routing_config_path: Path):
+    archive_excludes = load_archive_roots(routing_config_path)
+    merged = tuple(dict.fromkeys(config.exclude + archive_excludes))
+    return with_vault_overrides(config, exclude=merged)
+
+
 def _normalize_exclude(value: str) -> str:
     normalized = value.strip().strip("/")
     return normalized + "/" if normalized else normalized
@@ -300,7 +341,7 @@ def _normalize_exclude(value: str) -> str:
 def _search(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    results = search_index(index_path, args.query, limit=args.limit)
+    results = search_index(index_path, args.query, limit=args.limit, routing_config_path=args.routing_config)
     if not results:
         print("No results.")
         return 0
@@ -314,7 +355,7 @@ def _search(args: argparse.Namespace) -> int:
 def _inspect(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    inspection = inspect_path(index_path, args.path)
+    inspection = inspect_path(index_path, args.path, routing_config_path=args.routing_config)
     print(f"Path: {inspection.path}")
     print(f"Size: {inspection.size_bytes} bytes")
     print(f"Empty note: {inspection.is_empty_note}")
@@ -370,6 +411,8 @@ def _related(args: argparse.Namespace) -> int:
 
 def _index(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
+    if getattr(args, "routing_config", None) is not None:
+        config = _with_archive_excludes(config, args.routing_config)
     index_path = args.index or config.index_path
     if args.index_command == "info":
         info = read_index_info(index_path, config=config, check_filesystem=args.check_filesystem)
@@ -456,7 +499,12 @@ def _route(args: argparse.Namespace) -> int:
 def _find_duplicates(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    results = find_duplicates(index_path, _content_arg(args.content, args.file), limit=args.limit)
+    results = find_duplicates(
+        index_path,
+        _content_arg(args.content, args.file),
+        limit=args.limit,
+        routing_config_path=args.routing_config,
+    )
     if not results:
         print("No likely duplicates.")
         return 0
@@ -515,6 +563,7 @@ def _duplicates(args: argparse.Namespace) -> int:
 
 def _maintenance(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
+    config = _with_archive_excludes(config, args.routing_config)
     index_path = args.index or config.index_path
     if args.maintenance_command == "report":
         report = maintenance_report(
@@ -529,11 +578,13 @@ def _maintenance(args: argparse.Namespace) -> int:
         print(f"Ambiguous wikilinks: {report.ambiguous_wikilink_count}")
         print(f"Missing wikilinks: {report.missing_wikilink_count}")
         print(f"Unconfigured profiles: {report.unconfigured_profile_count}")
+        print(f"Semantic duplicates: {report.semantic_duplicate_count}")
         if not report.findings:
             print("No maintenance findings.")
             return 0
         for finding in report.findings:
             print(f"{finding.severity.upper()} {finding.type} {finding.path}")
+            print(f"  id: {finding.id}")
             print(f"  summary: {finding.summary}")
             print(f"  reasons: {', '.join(finding.reasons)}")
             print(f"  action: {finding.suggested_action}")

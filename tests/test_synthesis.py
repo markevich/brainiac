@@ -28,7 +28,7 @@ class SynthesisTest(unittest.TestCase):
             )
             (vault / "Brainiac" / "memory" / "synthesis" / "Fermentation.md").write_text(
                 """---
-brainiac_type: synthesis
+brainiac_role: synthesis
 topic: Fermentation
 last_reviewed: 2026-05-11
 source_snapshots:
@@ -100,7 +100,7 @@ synthesis_roots:
             )
             (vault / "Brainiac" / "memory" / "synthesis" / "Fermentation.md").write_text(
                 """---
-brainiac_type: synthesis
+brainiac_role: synthesis
 topic: Fermentation
 ---
 # Fermentation
@@ -151,7 +151,8 @@ synthesis_roots:
             )
 
             self.assertEqual(topic_suggestion.action, "create")
-            self.assertEqual(topic_suggestion.path, "Brainiac/memory/synthesis/pickles.md")
+            self.assertEqual(topic_suggestion.path, "Brainiac/memory/synthesis/pickles.synthesis.md")
+            self.assertIn("brainiac_role: synthesis", topic_suggestion.draft)
             self.assertIn("Sources/Pickles.md", [source.path for source in topic_suggestion.sources])
             self.assertIn("source_snapshots:", topic_suggestion.draft)
             self.assertIn("[[Pickles]]", topic_suggestion.draft)

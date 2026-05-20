@@ -1,6 +1,10 @@
 # Brainiac safety and write policies
 
 default_mode: "ask_before_source_mutation"
+maintenance_policy:
+  ask_on_uncertainty: true
+  ask_before_destructive_cleanup: true
+  avoid_always_ask_for_low_risk_edits: true
 
 sensitive_paths:
   - path: "2_Areas/Здоровье/"
@@ -29,12 +33,15 @@ write_policy:
     - "delete_file"
     - "move_many_files"
     - "rewrite_canonical_note"
+    - "update_markdown"
+    - "retire_source_note"
+    - "update_synthesis"
     - "change_operator_rules"
     - "modify_sensitive_note"
     - "modify_routing_policy"
 
 logging:
-  operations_log: "Brainiac/memory/logs/operations.md"
+  operations_log: "Brainiac/memory/logs/operations.jsonl"
   log_all_writes: true
 
 html_policy:

@@ -169,7 +169,7 @@ Tasks:
 
 - [ ] Study how PARA and alternatives map to Brainiac use cases.
 - [ ] Define Brainiac's recommended generic vault shape without requiring users to adopt it exactly.
-- [x] Separate universal roles from user-specific paths: inbox, projects, areas, resources, archive, generated, synthesis, queue.
+- [x] Separate universal roots from user-specific paths: inbox, projects, areas, resources, archive, generated, synthesis, queue.
 - [x] Add an initial routing config schema for role roots, sensitive domains, important short tokens, and disabled destination sections.
 - [x] Define an initial runtime vault map over roles, areas, projects, resources, and synthesis roots.
 - [x] Generate compact area/project/resource profiles from existing notes: path, role, tags, top terms, representative notes, and sensitive flag.
@@ -263,7 +263,7 @@ PYTHONPATH=src python3 -m brainiac synthesis suggest <topic-or-path>
 
 Implementation notes:
 
-- Synthesis notes are discovered by configured `synthesis_roots` or `brainiac_type: synthesis` frontmatter.
+- Synthesis notes are discovered by configured `synthesis_roots` or `brainiac_role: synthesis` frontmatter.
 - Markdown frontmatter is indexed into `markdown_metadata`.
 - Synthesis source references currently come from resolved wikilinks in synthesis notes.
 - Optional `source_snapshots` frontmatter entries use `path|sha256|mtime`; `synthesis stale` compares indexed source hashes with those snapshots.
@@ -283,7 +283,7 @@ Live-vault check:
 
 ## Phase 5.5: Canonicalization and Vault Maintenance
 
-Goal: turn duplicate detection and index diagnostics into operator-grade maintenance workflows that can repair vault defects after user confirmation.
+Goal: turn duplicate detection and index diagnostics into operator-grade maintenance guidance that helps a vault stay clean without forcing a heavyweight repair pipeline.
 
 Tasks:
 
@@ -300,18 +300,17 @@ Tasks:
 - [x] Surface meaningful empty directories using ignore rules plus role/structure semantics.
 - [x] Aggregate exact duplicate clusters and stale synthesis notes into the shared maintenance report layer.
 - [x] Expand vault defect reports to summarize ambiguous links, missing links, and unconfigured structure profiles in the same layer.
-- [ ] Add confirm-driven link-rewrite and source-note cleanup workflows for exact duplicate clusters.
-- [ ] Add synthesis-first reconciliation workflow for semantic duplicates before any merge/delete proposal.
-- [ ] Add Python-first `maintenance plan/apply` architecture with bounded action types and explicit confirmation.
-- [ ] Keep LLM usage advisory-only for ambiguous link resolution, semantic reconciliation, and synthesis refresh decisions.
-- [ ] Add maintenance write logging for canonicalization and cleanup operations.
+- [x] Add lightweight guidance for exact duplicate cleanup without making `plan/apply` the primary workflow.
+- [x] Add synthesis-first guidance for semantic duplicates before any merge/delete proposal.
+- [x] Keep LLM usage available for ambiguous link resolution, semantic reconciliation, and synthesis refresh decisions.
+- [ ] Add an optional batch maintenance assistant that can draft multiple low-risk edits, log writes, and revalidate afterward.
 
 Exit criteria:
 
 - Brainiac can explain current vault defects without broad manual inspection.
 - Exact duplicates can be canonicalized consistently before future writes.
 - Semantic duplicates can be reconciled through synthesis before source-note cleanup.
-- Maintenance workflows are confirm-driven and auditable.
+- Maintenance guidance stays lightweight enough that operators can move from report to edits and back to validation without a heavyweight approval pipeline.
 
 Planned commands:
 
@@ -319,23 +318,22 @@ Planned commands:
 PYTHONPATH=src python3 -m brainiac duplicates list
 PYTHONPATH=src python3 -m brainiac duplicates inspect <path-or-group>
 PYTHONPATH=src python3 -m brainiac maintenance report
-PYTHONPATH=src python3 -m brainiac maintenance plan <finding-id>
-PYTHONPATH=src python3 -m brainiac maintenance apply <plan-id> --confirm
 ```
 
-Apply architecture:
+Apply guidance:
 
-- Python should detect, classify, diff, validate, plan, apply, and log all maintenance operations.
-- LLM should only interpret ambiguous cases, compare semantic overlaps, propose reconciliation, or draft synthesis refreshes.
-- LLM should not execute vault writes directly; confirmed file operations should be applied by Python from a bounded action model.
-- Expected low-risk Python-first actions: delete empty files/directories, rewrite exact-duplicate links, remove non-canonical exact-duplicate copies, refresh index-backed metadata.
-- Expected hybrid actions: ambiguous wikilink resolution, semantic duplicate reconciliation, synthesis refresh/update.
-- The intended action model should stay explicit and auditable, for example `RewriteWikilinkAction`, `DeleteFileAction`, `DeleteDirectoryAction`, and `UpdateSynthesisAction`.
+- Python should detect, classify, and validate maintenance findings through report/index commands.
+- LLM should interpret ambiguous cases, compare semantic overlaps, propose reconciliation, or draft synthesis refreshes and merged notes.
+- LLM may write directly to files when the operator chooses that workflow; Python's role is to reindex and validate afterward.
+- A bounded action model may still exist later, but it should stay optional and auditable instead of becoming the default operator workflow.
 
 Current boundary:
 
-- implemented: detect exact duplicates, surface canonical paths, canonicalize exact duplicates for retrieval and synthesis, list exact duplicate clusters, inspect canonical reasons, separate semantic duplicate ideas from exact groups, and report empty directories, exact duplicate clusters, stale synthesis notes, missing/ambiguous wikilinks, and unconfigured structure profiles through a shared maintenance finding model
-- not yet implemented: confirm-driven relink, cleanup/apply workflows, Python-first maintenance execution, semantic-duplicate reconciliation workflows, and maintenance writes
+- implemented: detect exact duplicates, surface canonical paths, canonicalize exact duplicates for retrieval and synthesis, list exact duplicate clusters, inspect canonical reasons, separate semantic duplicate ideas from exact groups, and report empty directories, exact duplicate clusters, stale synthesis notes, missing/ambiguous wikilinks, unconfigured structure profiles, missing role markers, and semantic duplicate candidates through a shared maintenance finding model
+- implemented: maintenance report plus read-only duplicate/structure/synthesis diagnostics; the recommended operator loop is report -> LLM edits -> scan -> report
+- note: semantic duplicate findings intentionally compare source notes against source notes; derived synthesis freshness is tracked separately by stale synthesis detection
+- note: generated synthesis notes must not self-reference their own basename in `source_snapshots` or `Sources`; when basenames collide, prefer fully qualified source paths to avoid stale/ambiguous synthesis loops
+- not yet implemented: a first-class LLM editing runner or batch maintenance assistant that can apply multiple semantic changes in one pass and then revalidate the vault
 
 ## Phase 6: First Real Workflow
 
@@ -412,9 +410,9 @@ Exit criteria:
 
 ## Phase 10: Maintenance Automation
 
-Goal: automate upkeep only after synthesis, retrieval, routing, and safe writes are proven manually.
+Goal: keep maintenance lightweight and validation-driven after synthesis, retrieval, and routing are proven manually.
 
-Maintenance should build on Phase 5 synthesis primitives instead of introducing a separate understanding layer.
+Maintenance should build on Phase 5 synthesis primitives instead of introducing a separate understanding layer or a mandatory write pipeline.
 
 Tasks:
 
@@ -423,10 +421,10 @@ Tasks:
 - [ ] Detect orphan/generated artifacts that are stale or unsupported by current sources.
 - [ ] Detect notes that should probably update an existing synthesis note.
 - [ ] Detect areas/projects with many raw captures but no synthesis note.
-- [ ] Add dry-run maintenance plans with explicit source references.
-- [ ] Add policy gates for applying maintenance changes.
+- [ ] Add a first-class LLM batch-edit helper that can draft multiple maintenance fixes in one pass.
+- [ ] Add simple post-edit validation/reindex commands that confirm the vault still looks coherent.
 - [ ] Add optional notification/report output, but avoid daily briefing spam.
 
 Exit criteria:
 
-- Brainiac can keep synthesis and generated outputs fresh without silently rewriting source-of-truth notes.
+- Brainiac can keep synthesis and generated outputs fresh without forcing a heavy approval pipeline between report and edit.
