@@ -18,6 +18,15 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(config.index_path, Path("memory/index/brainiac.sqlite").resolve())
         self.assertEqual(config.generated_root, Path("memory/generated").resolve())
 
+    def test_loads_repository_routing_example_config_shape(self):
+        routing = load_routing_config(Path("config/routing.example.yml").resolve())
+
+        self.assertEqual(routing.destinations[0].path, "Inbox/")
+        self.assertEqual(routing.destinations[1].path, "Projects/")
+        self.assertEqual(routing.destinations[2].path, "Areas/")
+        self.assertEqual(routing.destinations[3].path, "Resources/")
+        self.assertEqual(routing.disabled_destination_sections, frozenset({"generated"}))
+
     def test_missing_local_config_is_created_from_template(self):
         with TemporaryDirectory() as tmp:
             config_dir = Path(tmp) / "config"
