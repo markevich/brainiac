@@ -19,6 +19,7 @@ from .vault_roles import (
     classify_path_role,
     has_explicit_role_marker,
     invalid_explicit_role_marker_values,
+    load_archive_roots,
     load_role_roots,
 )
 
@@ -90,6 +91,7 @@ class MaintenanceReport:
 @dataclass(frozen=True)
 class _SemanticDocument:
     path: str
+    stem: str
     title_key: str
     terms: frozenset[str]
     sha256: str
@@ -367,6 +369,7 @@ def _semantic_duplicate_findings(
     findings: list[MaintenanceFinding] = []
     routing_config = load_routing_config(routing_config_path)
     role_roots = load_role_roots(routing_config_path)
+    archive_roots = load_archive_roots(routing_config_path)
     synthesis_roots = tuple(root.path for root in role_roots if root.role == "synthesis")
     seen_pairs: set[tuple[str, str]] = set()
     with closing(sqlite3.connect(index_path)) as connection:
@@ -380,6 +383,8 @@ def _semantic_duplicate_findings(
         ).fetchall()
         documents: list[_SemanticDocument] = []
         for path, title, headings, tags, tasks, body, sha256 in rows:
+            if _is_under_roots(path, archive_roots):
+                continue
             note_role = classify_note_role(connection, path, role_roots)
             if (
                 _is_internal_brainiac_artifact(path)
@@ -392,10 +397,11 @@ def _semantic_duplicate_findings(
             documents.append(
                 _SemanticDocument(
                     path=path,
+                    stem=Path(path).stem,
                     title_key=_semantic_title_key(title or "", routing_config.important_terms),
                     terms=frozenset(
                         _semantic_terms(
-                            " ".join(value or "" for value in (path, title, headings, tags, tasks, body)),
+                            _semantic_text(path, title, headings, tags, tasks, body),
                             routing_config.important_terms,
                             routing_config.stopwords,
                         )
@@ -454,13 +460,43 @@ def _semantic_duplicate_findings(
     return tuple(findings)
 
 
+def _semantic_text(path: str, title: str, headings: str, tags: str, tasks: str, body: str) -> str:
+    return "\n".join(
+        part
+        for part in (
+            title,
+            headings,
+            tags,
+            tasks,
+            _strip_frontmatter(body),
+        )
+        if part
+    )
+
+
+def _strip_frontmatter(text: str) -> str:
+    if not text.startswith("---\n"):
+        return text
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return text
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            return "\n".join(lines[index + 1 :]).lstrip("\n")
+    return text
+
+
 def _score_semantic_candidate(seed: _SemanticDocument, candidate: _SemanticDocument) -> _SemanticCandidate:
     reasons: list[str] = []
+    if _same_parent_folder(seed.path, candidate.path):
+        score = _score_sibling_candidate(seed, candidate, reasons)
+        return _SemanticCandidate(path=candidate.path, score=score, reasons=tuple(dict.fromkeys(reasons)))
+
     score = 0
     if seed.title_key and seed.title_key == candidate.title_key:
         score += 70
         reasons.append("same title")
-    if seed.title_key and seed.title_key == Path(candidate.path).stem.casefold():
+    if seed.title_key and seed.title_key == candidate.stem.casefold():
         score += 50
         reasons.append("same note name")
     overlap = seed.terms & candidate.terms
@@ -471,8 +507,63 @@ def _score_semantic_candidate(seed: _SemanticDocument, candidate: _SemanticDocum
     return _SemanticCandidate(path=candidate.path, score=score, reasons=tuple(dict.fromkeys(reasons)))
 
 
+def _score_sibling_candidate(
+    seed: _SemanticDocument,
+    candidate: _SemanticDocument,
+    reasons: list[str],
+) -> int:
+    basename_similarity = _name_similarity(seed.stem, candidate.stem)
+    title_similarity = _name_similarity(seed.title_key, candidate.title_key)
+    best_name_similarity = max(basename_similarity, title_similarity)
+    reasons.append(f"same-folder sibling similarity: {best_name_similarity:.2f}")
+    if best_name_similarity < 0.85:
+        return 0
+    score = round(best_name_similarity * 100)
+    if seed.title_key and seed.title_key == candidate.title_key:
+        score += 20
+        reasons.append("same title")
+    if seed.stem.casefold() == candidate.stem.casefold():
+        score += 15
+        reasons.append("same note name")
+    return score
+
+
 def _semantic_title_key(title: str, important_terms: frozenset[str]) -> str:
     return " ".join(sorted(_semantic_terms(title, important_terms, frozenset()))).casefold()
+
+
+def _same_parent_folder(path_a: str, path_b: str) -> bool:
+    return Path(path_a).parent.as_posix() == Path(path_b).parent.as_posix()
+
+
+def _name_similarity(left: str, right: str) -> float:
+    left_tokens = _name_tokens(left)
+    right_tokens = _name_tokens(right)
+    if left_tokens and right_tokens:
+        overlap = len(left_tokens & right_tokens)
+        if not overlap:
+            return 0.0
+        return max(
+            overlap / len(left_tokens),
+            overlap / len(right_tokens),
+        )
+    left_normalized = _normalize_name(left)
+    right_normalized = _normalize_name(right)
+    if not left_normalized or not right_normalized:
+        return 0.0
+    return 1.0 if left_normalized == right_normalized else 0.0
+
+
+def _name_tokens(text: str) -> set[str]:
+    return {
+        token.casefold()
+        for token in WORD_RE.findall(text)
+        if any(char.isalpha() for char in token)
+    }
+
+
+def _normalize_name(text: str) -> str:
+    return re.sub(r"\s+", " ", text.casefold()).strip()
 
 
 def _semantic_terms(
@@ -502,6 +593,10 @@ def _keep_semantic_token(
 
 def _is_internal_brainiac_artifact(path: str) -> bool:
     return path.startswith("Brainiac/memory/")
+
+
+def _is_under_roots(path: str, roots: tuple[str, ...]) -> bool:
+    return any(path == root.rstrip("/") or path.startswith(root) for root in roots)
 
 
 def _is_umbrella_like_note(title: str, headings: str, tags: str, tasks: str, body: str) -> bool:

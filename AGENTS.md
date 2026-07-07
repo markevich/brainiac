@@ -27,6 +27,8 @@ Rules:
 - Keep write operations explicit, logged, and policy-checked.
 - Do not build an Obsidian clone.
 - Do not introduce autonomous rewrite behavior before dry-run/review workflows exist.
+- Use `PYTHONPATH=src python3 -m brainiac <command>` for CLI runs in this repo.
+- Use `uv run python -m unittest tests.test_maintenance tests.test_duplicates` for the default test pass; prefer `unittest` here unless the task explicitly needs `pytest`.
 
 ## Operator Mode
 

@@ -199,6 +199,7 @@ If two notes overlap in meaning but not in content:
 - reconcile via synthesis first
 - compare source notes against source notes; synthesis notes are handled separately as derived memory freshness, not as ordinary duplicate candidates
 - only then propose merge or cleanup
+- sibling notes that share a folder subtree are expected to share structure; for those, name similarity must carry much more weight than template similarity before a duplicate is reported
 
 ## Synthesis Strategy
 

@@ -219,6 +219,47 @@ synthesis_roots:
             self.assertEqual(len(stale_findings), 1)
             self.assertEqual(stale_findings[0].path, "Brainiac/memory/synthesis/Topic synthesis.md")
 
+    def test_ignores_frontmatter_role_markers_in_semantic_duplicate_scoring(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "A").mkdir(parents=True)
+            (vault / "B").mkdir()
+            (vault / "A" / "One.md").write_text(
+                "---\nbrainiac_role: source\n---\n# One\n\nAlpha content.\n",
+                encoding="utf-8",
+            )
+            (vault / "B" / "Two.md").write_text(
+                "---\nbrainiac_role: source\n---\n# Two\n\nBeta content.\n",
+                encoding="utf-8",
+            )
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+area_roots:
+  - "A/"
+resource_roots:
+  - "B/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            report = maintenance_report(config.index_path, config=config, routing_config_path=routing_config)
+
+            semantic_findings = [finding for finding in report.findings if finding.type == "semantic_duplicate"]
+
+            self.assertEqual(report.semantic_duplicate_count, 0)
+            self.assertEqual(len(semantic_findings), 0)
+
     def test_does_not_classify_umbrella_list_notes_as_semantic_duplicates(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -233,6 +274,44 @@ synthesis_roots:
                 """
 area_roots:
   - "A/"
+""",
+                encoding="utf-8",
+            )
+            config = VaultConfig(
+                name="Test vault",
+                root=vault,
+                exclude=(),
+                source_patterns=("*.md",),
+                index_path=tmp_path / "brainiac.sqlite",
+                generated_root=tmp_path / "generated",
+            )
+
+            write_index(config.index_path, scan_vault(config))
+            report = maintenance_report(config.index_path, config=config, routing_config_path=routing_config)
+
+            semantic_findings = [finding for finding in report.findings if finding.type == "semantic_duplicate"]
+
+            self.assertEqual(report.semantic_duplicate_count, 0)
+            self.assertEqual(len(semantic_findings), 0)
+
+    def test_does_not_flag_sibling_cards_in_the_same_folder_as_semantic_duplicates(self):
+        with TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            vault = tmp_path / "vault"
+            (vault / "Catalog").mkdir(parents=True)
+            (vault / "Catalog" / "Alpha.md").write_text(
+                "# Alpha\n\n- Rating: 9/10\n- Top items: one, two, three\n",
+                encoding="utf-8",
+            )
+            (vault / "Catalog" / "Beta.md").write_text(
+                "# Beta\n\n- Rating: 8/10\n- Top items: four, five, six\n",
+                encoding="utf-8",
+            )
+            routing_config = tmp_path / "routing.yml"
+            routing_config.write_text(
+                """
+resource_roots:
+  - "Catalog/"
 """,
                 encoding="utf-8",
             )
