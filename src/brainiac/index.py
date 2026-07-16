@@ -445,7 +445,7 @@ def _resolve_target(
     match = page_index.get(normalized)
     if match is not None:
         return match, None, "resolved", None
-    stem_matches = stem_index.get(Path(normalized).stem, set())
+    stem_matches = stem_index.get(Path(normalized).name, set())
     if len(stem_matches) == 1:
         only = next(iter(stem_matches))
         return only, None, "resolved", None

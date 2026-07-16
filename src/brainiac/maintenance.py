@@ -334,7 +334,9 @@ def _missing_role_marker_findings(
             if has_explicit_role_marker(connection, path):
                 continue
             note_role = classify_note_role(connection, path, role_roots)
-            umbrella_like = _is_umbrella_like_note(title, headings, tags, tasks, body)
+            umbrella_like = _is_umbrella_like_note(
+                connection, path, title, headings, tags, tasks, body
+            )
             if umbrella_like:
                 role_hint = "umbrella"
             elif note_role == "synthesis":
@@ -392,13 +394,17 @@ def _semantic_duplicate_findings(
                 or is_synthesis_path(connection, path, synthesis_roots)
             ):
                 continue
-            if note_role == "source" and _is_umbrella_like_note(title, headings, tags, tasks, body):
+            if note_role == "source" and _is_umbrella_like_note(
+                connection, path, title, headings, tags, tasks, body
+            ):
                 continue
             documents.append(
                 _SemanticDocument(
                     path=path,
                     stem=Path(path).stem,
-                    title_key=_semantic_title_key(title or "", routing_config.important_terms),
+                    title_key=_semantic_title_key(
+                        title or "", routing_config.important_terms, routing_config.stopwords
+                    ),
                     terms=frozenset(
                         _semantic_terms(
                             _semantic_text(path, title, headings, tags, tasks, body),
@@ -435,6 +441,9 @@ def _semantic_duplicate_findings(
                     if candidate_path != document.path
                     and candidate_path in by_path
                     and by_path[candidate_path].sha256 != document.sha256
+                    and not _same_journal_root(
+                        document.path, candidate_path, routing_config.journal_roots
+                    )
                 ),
                 key=lambda candidate: (-candidate.score, candidate.path),
             )
@@ -528,8 +537,10 @@ def _score_sibling_candidate(
     return score
 
 
-def _semantic_title_key(title: str, important_terms: frozenset[str]) -> str:
-    return " ".join(sorted(_semantic_terms(title, important_terms, frozenset()))).casefold()
+def _semantic_title_key(
+    title: str, important_terms: frozenset[str], stopwords: frozenset[str]
+) -> str:
+    return " ".join(sorted(_semantic_terms(title, important_terms, stopwords))).casefold()
 
 
 def _same_parent_folder(path_a: str, path_b: str) -> bool:
@@ -599,9 +610,27 @@ def _is_under_roots(path: str, roots: tuple[str, ...]) -> bool:
     return any(path == root.rstrip("/") or path.startswith(root) for root in roots)
 
 
-def _is_umbrella_like_note(title: str, headings: str, tags: str, tasks: str, body: str) -> bool:
+def _same_journal_root(path_a: str, path_b: str, journal_roots: tuple[str, ...]) -> bool:
+    return any(
+        (path_a == root.rstrip("/") or path_a.startswith(root))
+        and (path_b == root.rstrip("/") or path_b.startswith(root))
+        for root in journal_roots
+    )
+
+
+def _is_umbrella_like_note(
+    connection: sqlite3.Connection,
+    path: str,
+    title: str,
+    headings: str,
+    tags: str,
+    tasks: str,
+    body: str,
+) -> bool:
     text = "\n".join(part for part in (title, headings, tags, tasks, body) if part)
     if "[[" not in text:
+        return False
+    if not _has_note_wikilink(connection, path):
         return False
     lines = [line.strip() for line in body.splitlines() if line.strip()]
     if not lines:
@@ -622,6 +651,26 @@ def _is_umbrella_like_note(title: str, headings: str, tags: str, tasks: str, bod
         return False
     word_count = len(WORD_RE.findall(text.replace("[[", " ").replace("]]", " ")))
     return word_count <= 20
+
+
+_ASSET_TARGET_RE = re.compile(
+    r"\.(png|jpe?g|gif|bmp|tiff?|webp|heic|svg|pdf|mp3|mp4|mov|m4a|wav|zip)$",
+    re.IGNORECASE,
+)
+
+
+def _has_note_wikilink(connection: sqlite3.Connection, path: str) -> bool:
+    targets = connection.execute(
+        "SELECT target, resolved_path FROM wikilinks WHERE file_path = ?",
+        (path,),
+    ).fetchall()
+    for target, resolved_path in targets:
+        if resolved_path and not resolved_path.casefold().endswith(".md"):
+            continue
+        if _ASSET_TARGET_RE.search(target or ""):
+            continue
+        return True
+    return False
 
 
 def _empty_directory_findings(
