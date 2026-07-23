@@ -2,6 +2,8 @@
 
 Use Brainiac commands before broad filesystem reads. Start with `brainiac index info`, then search or inspect bounded candidates.
 
+If exact lexical search is empty or weak, try a bounded expansion before reading more files: translate the query, use a close synonym, or search a known category or location. Then inspect the matching umbrella and read only the relevant section. Record a recurring miss rather than adding a retrieval feature from one example.
+
 After creating or materially changing a source note:
 
 1. Run `brainiac inspect <path>`.
