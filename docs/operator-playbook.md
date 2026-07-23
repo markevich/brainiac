@@ -8,7 +8,7 @@
 
 ## Retrieval
 
-Use `search`, `inspect`, `related`, and then `read` selected files. Do not search the whole vault directly until bounded retrieval is insufficient.
+Use `search`, `inspect`, `related`, and then `read` selected files. Do not search the whole vault directly until bounded retrieval is insufficient. If exact lexical search is empty or weak, first try a bounded query expansion: a translation, close synonym, or category/location term. Inspect the matching umbrella and read only the relevant section. Treat a repeated miss as evidence for product work; a single miss is not.
 
 ## Source and umbrella rule
 
