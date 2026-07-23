@@ -69,7 +69,6 @@ src/brainiac/
   report.py
 tests/
 memory/
-  synthesis/
   generated/
   queue/
   index/

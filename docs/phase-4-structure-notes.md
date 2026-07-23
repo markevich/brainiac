@@ -32,9 +32,6 @@ resource_roots:
   - "3_Resources/"
   - "ibooks-highlights/"
 
-synthesis_roots:
-  - "Brainiac/memory/synthesis/"
-
 queue_roots:
   - "Brainiac/memory/queue/"
 

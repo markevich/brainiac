@@ -107,7 +107,7 @@ def _profiles(
 
 
 def _profile_paths(connection: sqlite3.Connection, root: RoleRoot) -> tuple[str, ...]:
-    if root.role in {"inbox", "generated", "queue", "synthesis"}:
+    if root.role in {"inbox", "generated", "queue"}:
         return (root.path,)
     child_dirs = set()
     direct_files = set()

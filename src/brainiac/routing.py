@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .routing_config import ensure_routing_config
-from .vault_roles import classify_note_role, load_role_roots
 
 
 TOKEN_RE = re.compile(r"[^\W_]+", re.UNICODE)
@@ -29,7 +28,6 @@ CONFIG_SECTIONS = {
     "sensitive_destination_keys",
     "sensitive_path_prefixes",
     "stopwords",
-    "synthesis_roots",
 }
 DUPLICATE_ROUTE_BOOST_MIN_SCORE = 30
 LOW_CONFIDENCE_ROUTE_SCORE = 20
@@ -149,8 +147,6 @@ def route_content(
     routing_config = load_routing_config(routing_config_path)
     if not routing_config.destinations:
         raise ValueError(f"No routing destinations found in {routing_config_path}")
-    role_roots = load_role_roots(routing_config_path)
-
     title = extract_title(content)
     content_terms = _terms(content, routing_config.important_terms)
     duplicates = find_duplicates(
@@ -162,10 +158,10 @@ def route_content(
     )
 
     with closing(sqlite3.connect(index_path)) as connection:
-        markdown_paths = _markdown_paths(connection, role_roots)
-        existing_titles = _existing_titles(connection, routing_config.important_terms, role_roots)
+        markdown_paths = _markdown_paths(connection)
+        existing_titles = _existing_titles(connection, routing_config.important_terms)
         existing_basenames = {Path(path).stem.casefold(): path for path in markdown_paths}
-        document_terms = _document_terms(connection, routing_config.important_terms, role_roots)
+        document_terms = _document_terms(connection, routing_config.important_terms)
 
         candidates: list[RouteCandidate] = []
         for destination in routing_config.destinations:
@@ -233,15 +229,12 @@ def find_duplicates(
 
     candidates: list[DuplicateCandidate] = []
     with closing(sqlite3.connect(index_path)) as connection:
-        role_roots = load_role_roots(routing_config_path)
         for path, path_text, existing_title, headings, tags, tasks, body in connection.execute(
             """
             SELECT path, path_text, title, headings, tags, tasks, body
             FROM search_index
             """
         ).fetchall():
-            if _is_ignored_write_path(connection, path, role_roots):
-                continue
             reasons: list[str] = []
             score = 0
             existing_title_key = _title_key(existing_title, important_terms)
@@ -381,9 +374,7 @@ def _suggest_write(
         action = "update" if path in markdown_paths else "create"
         reasons = [f"dry-run {action} suggestion"]
 
-    role_hint = _role_hint_for_content(content)
-    if role_hint is not None:
-        reasons.append(f"suggested frontmatter role: {role_hint}")
+    reasons.append("suggested frontmatter role: source")
 
     return WriteSuggestion(
         action=action,
@@ -445,30 +436,25 @@ def _safe_note_stem(title: str) -> str:
 def _existing_titles(
     connection: sqlite3.Connection,
     important_terms: frozenset[str],
-    role_roots: tuple,
 ) -> dict[str, str]:
     titles: dict[str, str] = {}
     for path, title in connection.execute("SELECT path, title FROM search_index").fetchall():
-        if _is_ignored_write_path(connection, path, role_roots):
-            continue
         key = _title_key(title, important_terms)
         if key:
             titles.setdefault(key, path)
     return titles
 
 
-def _markdown_paths(connection: sqlite3.Connection, role_roots: tuple) -> set[str]:
+def _markdown_paths(connection: sqlite3.Connection) -> set[str]:
     return {
         row[0]
         for row in connection.execute("SELECT path FROM files WHERE is_markdown = 1").fetchall()
-        if not _is_ignored_write_path(connection, row[0], role_roots)
     }
 
 
 def _document_terms(
     connection: sqlite3.Connection,
     important_terms: frozenset[str],
-    role_roots: tuple,
 ) -> dict[str, set[str]]:
     return {
         path: _terms(
@@ -481,7 +467,6 @@ def _document_terms(
             FROM search_index
             """
         ).fetchall()
-        if not _is_ignored_write_path(connection, path, role_roots)
     }
 
 
@@ -498,11 +483,6 @@ def _keep_token(token: str, important_terms: frozenset[str]) -> bool:
     return len(normalized) > 2 or normalized in important_terms
 
 
-def _is_ignored_write_path(connection: sqlite3.Connection, path: str, role_roots: tuple) -> bool:
-    role = classify_note_role(connection, path, role_roots)
-    return role == "synthesis"
-
-
 def _title_key(title: str, important_terms: frozenset[str]) -> str:
     return " ".join(sorted(_terms(title, important_terms))).casefold()
 
@@ -513,34 +493,6 @@ def _normalize_term(term: str) -> str:
 
 def _normalize_destination_key(key: str) -> str:
     return key.casefold().strip()
-
-
-def _role_hint_for_content(content: str) -> str | None:
-    if _looks_umbrella_like(content):
-        return "umbrella"
-    return "source"
-
-
-def _looks_umbrella_like(content: str) -> bool:
-    lines = [line.strip() for line in content.splitlines() if line.strip()]
-    if len(lines) < 2:
-        return False
-    prose_lines = 0
-    link_lines = 0
-    for line in lines:
-        if line.startswith("#"):
-            continue
-        if line.startswith(("-", "*", "+")) and "[[" in line:
-            link_lines += 1
-            continue
-        if re.fullmatch(r"\[\[[^\]]+\]\]", line):
-            link_lines += 1
-            continue
-        prose_lines += 1
-    if link_lines == 0 or prose_lines > 1:
-        return False
-    word_count = len(TOKEN_RE.findall(content))
-    return word_count <= 30
 
 
 def _unquote(value: str) -> str:

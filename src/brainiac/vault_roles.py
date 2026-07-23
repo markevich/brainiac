@@ -11,7 +11,6 @@ ROLE_ROOT_SECTIONS = {
     "area_roots": "area",
     "project_roots": "project",
     "resource_roots": "resource",
-    "synthesis_roots": "synthesis",
     "generated_roots": "generated",
     "queue_roots": "queue",
     "inbox_roots": "inbox",
@@ -19,7 +18,6 @@ ROLE_ROOT_SECTIONS = {
 ROLE_MARKER_VALUES = {
     "source",
     "umbrella",
-    "synthesis",
 }
 
 

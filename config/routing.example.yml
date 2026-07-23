@@ -15,9 +15,6 @@ areas:
 resources:
   default: "Resources/"
 
-synthesis:
-  root: "Brainiac/memory/synthesis/"
-
 queue:
   root: "Brainiac/memory/queue/"
 
@@ -35,9 +32,6 @@ area_roots:
 
 resource_roots:
   - "Resources/"
-
-synthesis_roots:
-  - "Brainiac/memory/synthesis/"
 
 queue_roots:
   - "Brainiac/memory/queue/"
@@ -77,6 +71,6 @@ rules:
   - name: "Prefer updating existing canonical notes"
     description: "Before creating a new note, search for existing related notes and duplicates."
   - name: "Keep raw imports separate"
-    description: "Raw captures and imports should remain as sources; synthesize into separate notes."
+    description: "Raw captures and imports should remain as sources; use umbrellas for navigation when needed."
   - name: "Generated artifacts are not truth"
     description: "Dashboards and reports should be regenerated from source data."
