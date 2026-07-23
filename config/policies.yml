@@ -27,7 +27,6 @@ write_policy:
     - "2_Areas/"
     - "3_Resources/"
     - "ibooks-highlights/"
-    - "Brainiac/memory/synthesis/"
 
   always_confirm:
     - "delete_file"
@@ -35,7 +34,6 @@ write_policy:
     - "rewrite_canonical_note"
     - "update_markdown"
     - "retire_source_note"
-    - "update_synthesis"
     - "change_operator_rules"
     - "modify_sensitive_note"
     - "modify_routing_policy"
@@ -48,12 +46,3 @@ html_policy:
   canonical: false
   direct_vault_write: false
   allowed_as_generated_artifact: true
-
-synthesis_policy:
-  canonical: false
-  derived_memory: true
-  dry_run_command: "synthesis suggest"
-  write_mode: "review_before_apply"
-  require_source_links: true
-  require_source_snapshots: true
-  require_explicit_confirmation: true

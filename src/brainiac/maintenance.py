@@ -12,7 +12,6 @@ from .duplicates import list_exact_duplicate_groups
 from .routing import load_routing_config
 from .scanner import walk_source_files
 from .structure import analyze_structure
-from .synthesis import is_synthesis_path, stale_synthesis_notes
 from .vault_roles import (
     RoleRoot,
     classify_note_role,
@@ -58,10 +57,6 @@ class MaintenanceReport:
     @property
     def exact_duplicate_count(self) -> int:
         return sum(1 for finding in self.findings if finding.type == "exact_duplicate_group")
-
-    @property
-    def stale_synthesis_count(self) -> int:
-        return sum(1 for finding in self.findings if finding.type == "stale_synthesis")
 
     @property
     def ambiguous_wikilink_count(self) -> int:
@@ -136,12 +131,6 @@ def maintenance_report(
                 routing_config_path,
             )
         )
-        findings.extend(
-            _stale_synthesis_findings(
-                index_path,
-                routing_config_path,
-            )
-        )
         findings.extend(_ambiguous_wikilink_findings(connection))
         findings.extend(_missing_wikilink_findings(connection))
         findings.extend(_unconfigured_profile_findings(index_path, routing_config_path))
@@ -174,30 +163,6 @@ def _exact_duplicate_findings(
                 suggested_action=(
                     "Keep the canonical path for retrieval and future writes; review non-canonical copies for relink or deletion."
                 ),
-            )
-        )
-    return tuple(findings)
-
-
-def _stale_synthesis_findings(
-    index_path: Path,
-    routing_config_path: Path,
-) -> tuple[MaintenanceFinding, ...]:
-    findings: list[MaintenanceFinding] = []
-    for note in stale_synthesis_notes(index_path, routing_config_path, limit=200):
-        stale_paths = tuple(source.path for source in note.stale_sources)
-        findings.append(
-            MaintenanceFinding(
-                id=f"stale_synthesis:{note.path}",
-                type="stale_synthesis",
-                severity="medium",
-                path=note.path,
-                summary=f"Stale synthesis note ({len(note.stale_sources)} changed sources)",
-                reasons=tuple(
-                    [f"{len(note.stale_sources)} referenced sources changed since last synthesis snapshot"]
-                    + [f"stale source: {path}" for path in stale_paths[:5]]
-                ),
-                suggested_action="Refresh this synthesis note against current canonical source notes.",
             )
         )
     return tuple(findings)
@@ -308,9 +273,9 @@ def _invalid_role_marker_findings(index_path: Path) -> tuple[MaintenanceFinding,
                     summary="Invalid explicit role marker",
                     reasons=(
                         f"unsupported brainiac_role value(s): {', '.join(invalid_values)}",
-                        "valid values: source, umbrella, synthesis",
+                        "valid values: source, umbrella",
                     ),
-                    suggested_action="Replace brainiac_role with one of: source, umbrella, synthesis.",
+                    suggested_action="Replace brainiac_role with one of: source, umbrella.",
                 )
             )
     return tuple(findings)
@@ -337,13 +302,9 @@ def _missing_role_marker_findings(
             umbrella_like = _is_umbrella_like_note(title, headings, tags, tasks, body)
             if umbrella_like:
                 role_hint = "umbrella"
-            elif note_role == "synthesis":
-                role_hint = note_role
             else:
                 role_hint = "source"
             reasons = [f"no explicit brainiac_role marker on {path}"]
-            if note_role == "synthesis":
-                reasons.append(f"inferred role: {note_role}")
             if umbrella_like:
                 reasons.append("note is list-like and may be a master list/index note")
             elif role_hint == "source":
@@ -352,7 +313,7 @@ def _missing_role_marker_findings(
                 MaintenanceFinding(
                     id=f"missing_role_marker:{path}",
                     type="missing_role_marker",
-                    severity="medium" if role_hint in {"synthesis", "umbrella"} else "low",
+                    severity="medium" if role_hint == "umbrella" else "low",
                     path=path,
                     summary="Missing explicit role marker",
                     reasons=tuple(reasons),
@@ -370,7 +331,6 @@ def _semantic_duplicate_findings(
     routing_config = load_routing_config(routing_config_path)
     role_roots = load_role_roots(routing_config_path)
     archive_roots = load_archive_roots(routing_config_path)
-    synthesis_roots = tuple(root.path for root in role_roots if root.role == "synthesis")
     seen_pairs: set[tuple[str, str]] = set()
     with closing(sqlite3.connect(index_path)) as connection:
         rows = connection.execute(
@@ -388,8 +348,7 @@ def _semantic_duplicate_findings(
             note_role = classify_note_role(connection, path, role_roots)
             if (
                 _is_internal_brainiac_artifact(path)
-                or note_role in {"synthesis", "umbrella"}
-                or is_synthesis_path(connection, path, synthesis_roots)
+                or note_role == "umbrella"
             ):
                 continue
             if note_role == "source" and _is_umbrella_like_note(title, headings, tags, tasks, body):
@@ -453,7 +412,7 @@ def _semantic_duplicate_findings(
                         path=pair[0],
                         summary=f"Semantic duplicate candidate ({pair[1]})",
                         reasons=tuple(dict.fromkeys((f"similar note: {candidate.path}",) + candidate.reasons)),
-                        suggested_action="Review both notes, synthesize first, then consider retirement or merge with review.",
+                        suggested_action="Review both notes, preserve unique details, then consider a merge or retirement with review.",
                     )
                 )
                 break
@@ -709,7 +668,7 @@ def _empty_directory_finding(
         summary = f"Empty {role} directory"
         reasons.append(f"directory sits under the {role} role")
         suggested_action = "Delete if abandoned, or add the source notes that should live here."
-    elif role in {"generated", "queue", "synthesis"}:
+    elif role in {"generated", "queue"}:
         return None
     elif _looks_user_facing(dir_key):
         summary = "Empty unclassified directory"

@@ -196,7 +196,6 @@ def _build_assessment(path: str, role_roots: tuple[RoleRoot, ...], cache) -> _Du
     queue_like = _contains_folder(path, "queue")
     inbox_like = role == "inbox"
     role_rank = {
-        "synthesis": 2,
         "resource": 4,
         "project": 4,
         "queue": 1,

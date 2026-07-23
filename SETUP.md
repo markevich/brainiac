@@ -16,7 +16,7 @@ When an LLM helps a user onboard Brainiac, it should do this in order:
 1. Ask for the local vault path.
 2. Ask whether the vault should follow the standard PARA roots.
 3. If yes, default to `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`.
-4. Ask whether the vault should also contain `Brainiac/memory/synthesis/`, `Brainiac/memory/queue/`, and `Brainiac/memory/generated/`.
+4. Ask whether the vault should also contain `Brainiac/memory/queue/` and `Brainiac/memory/generated/`.
 5. Ask which folders should be ignored during scan.
 6. Fill `config/vault.yml`.
 7. Fill `config/routing.yml`.
@@ -34,7 +34,6 @@ If you standardize on PARA, use:
 - `Areas/`
 - `Resources/`
 - `Archive/`
-- `Brainiac/memory/synthesis/`
 - `Brainiac/memory/queue/`
 - `Brainiac/memory/generated/`
 
@@ -83,7 +82,6 @@ Usually also fill:
 - `project_roots`
 - `area_roots`
 - `resource_roots`
-- `synthesis.root` and `synthesis_roots`
 - `queue.root` and `queue_roots`
 - `generated.root` and `generated_roots`
 
