@@ -4,6 +4,7 @@ __pycache__/
 uv.lock
 config/vault.yml
 config/routing.yml
+.claude/settings.local.json
 memory/index/*.sqlite
 memory/generated/reports/inventory.md
 memory/logs/
