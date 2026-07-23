@@ -4,7 +4,7 @@ This note records the implementation details and validation state for the first 
 
 ## Scope Implemented
 
-Phase 4 starts with a role-based vault structure model, not a PARA-only decision.
+This first slice implemented a configurable role-based model. The product decision now is stricter: new Brainiac-managed vaults must use PARA. The configurable roots remain transitional compatibility for an existing vault until it is explicitly migrated.
 
 Implemented command:
 
@@ -39,7 +39,7 @@ generated_roots:
   - "Brainiac/memory/generated/"
 ```
 
-These paths are local configuration, not Brainiac core assumptions. New users can map different folder names or languages to the same canonical roles.
+For a new Brainiac-managed vault, canonical roots are `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`; `Brainiac/` is tool-owned. Alternative paths are compatibility configuration for an existing vault, not a new-vault option.
 
 `stopwords` are also config-driven. They are only used to keep displayed top terms and profile signals cleaner; they do not mutate vault content.
 
@@ -71,17 +71,12 @@ Validated scenarios:
   - detects `2_Areas/Вокал/` as `route-missing`;
   - marks configured sensitive areas from config;
   - treats `ibooks-highlights/` as one resource profile.
-- English custom vault:
-  - works with `Inbox/`, `Projects/`, `Areas/`, `Resources/` when provided by config.
-- Russian custom vault:
-  - works with `Входящие/`, `Области/`, `Справочник/` when provided by config.
-- Sparse vault without role roots:
-  - does not guess paths;
-  - recommends configuring role roots.
+- Existing custom vaults remain readable through explicitly configured roots.
+- New-vault PARA enforcement and migration planning are not implemented by this first slice.
 
 ## Remaining Work
 
-The next useful step is to connect these profiles back into routing:
+The next useful step is to enforce PARA for new vaults and offer a dry-run migration plan for existing ones. After that, profiles can inform routing:
 
 - rank area/project/resource profiles before choosing a destination;
 - use profile signals for low-confidence and new-area suggestions;

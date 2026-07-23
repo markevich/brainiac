@@ -8,6 +8,10 @@ vault files -> incremental SQLite index -> bounded CLI tools -> Jarvis
 
 Markdown and structured files are truth. The index is an incremental, rebuildable cache. Brainiac is not an Obsidian clone.
 
+## Vault layout
+
+New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. Tool-owned files live under `Brainiac/`. Existing vaults are migrated only through an explicit, reviewed migration plan; Brainiac never rearranges them automatically.
+
 ## Note roles
 
 - `source` is the default role for new notes.

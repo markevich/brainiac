@@ -1,7 +1,7 @@
 # Brainiac routing example
 #
-# This file is a tracked template that shows the generic config shape.
-# Copy it to `config/routing.yml` for local vault-specific mappings.
+# This file is the canonical PARA layout for a new Brainiac-managed vault.
+# Copy it to `config/routing.yml`; existing vaults require an explicit migration plan.
 
 inbox:
   default: "Inbox/"

@@ -2,6 +2,10 @@
 
 Brainiac is an AI-first local retrieval and maintenance backend over a plain-file vault. Markdown and structured files are truth; SQLite is a rebuildable retrieval cache.
 
+## Vault layout
+
+The required layout for a new Brainiac-managed vault is PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. `Brainiac/` holds tool-owned indexes, logs, queues, and generated output. Existing vaults require an explicit migration plan; Brainiac must not move them automatically.
+
 ## Note roles
 
 - `source` is the default role for every new note: facts, captures, cards, tasks, and observations.

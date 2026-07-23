@@ -82,30 +82,37 @@ PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac find-duplicates "# New note..."
 ```
 
-## Phase 4: Vault Structure Model — in progress
+## Phase 4: Enforced PARA Vault Structure — current focus
 
-Goal: define a generic taxonomy that makes routing, retrieval, and safe writes portable across vaults.
+Goal: make PARA the required layout for new Brainiac-managed vaults while keeping existing-vault migration explicit and safe.
 
 Completed work:
 
-- [x] Define configurable roots for inbox, projects, areas, resources, archive, generated output, and queue.
+- [x] Define configurable roots for inbox, projects, areas, resources, archive, generated output, and queue as a compatibility layer.
 - [x] Add routing config for role roots, sensitive domains, important short tokens, and disabled destinations.
 - [x] Generate compact area/project/resource profiles: path, role, note and file counts, tags, terms, representative notes, routing coverage, and sensitivity.
 - [x] Add `brainiac structure` and maintenance findings for unconfigured profiles.
 - [x] Use profile findings to make local routing destinations explicit.
 
-Remaining work:
+Required work:
 
-- [ ] Study PARA and alternatives only to improve portable guidance, not to force a vault migration.
-- [ ] Add optional recent-activity summaries and aliases/domain hints as local overrides.
+- [ ] Document the PARA decision and exact meanings of `Inbox/`, `Projects/`, `Areas/`, `Resources/`, `Archive/`, and `Brainiac/`.
+- [ ] Add a new-vault bootstrap and config validation that require the canonical PARA roots.
+- [ ] Restrict routing for new managed vaults to the canonical roots.
+- [ ] Make `structure` and `maintenance` report PARA-compliance rather than merely unconfigured profiles.
+- [ ] Build a dry-run migration planner for existing vaults that maps current paths to PARA targets, detects collisions and sensitive paths, and never moves files.
+- [ ] Require explicit confirmation before any later migration apply workflow.
+
+Deferred, evidence-driven enhancements:
+
+- [ ] Add optional recent-activity summaries and aliases/domain hints.
 - [ ] Use profile evidence as an additional routing signal when observed routing failures justify it.
-- [ ] Support sparse vaults with generic role templates and “candidate new area” suggestions.
-- [ ] Document migration-safe recommendations: propose, do not move files automatically.
 
 Exit criteria:
 
-- Brainiac can explain the role of each configured path.
-- Routing remains portable by role while local paths stay configuration-only.
+- A new Brainiac vault is created and validated with the canonical PARA roots.
+- Routing proposes destinations only within those roots.
+- An existing vault receives a bounded migration proposal without any automatic move.
 - Source code contains no user-specific vault assumptions.
 
 ```bash
@@ -169,7 +176,7 @@ PYTHONPATH=src python3 -m brainiac duplicates list
 PYTHONPATH=src python3 -m brainiac maintenance report
 ```
 
-## Phase 6: Field Validation of the Operator Loop — current focus
+## Phase 6: Field Validation of the Operator Loop
 
 Goal: prove that the existing CLI and source/umbrella model help in real work before adding retrieval complexity.
 
@@ -245,4 +252,4 @@ Exit criterion: Brainiac helps keep navigation and vault structure coherent with
 - An Obsidian clone.
 - Autonomous vault rewrites.
 - Mandatory derived-summary notes or background summary maintenance.
-- A forced PARA migration or hardcoded personal vault structure.
+- Automatic PARA migration or hardcoded personal vault structure.
