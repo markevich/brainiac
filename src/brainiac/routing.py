@@ -21,6 +21,7 @@ CONFIG_SECTIONS = {
     "important_terms",
     "generated_roots",
     "inbox_roots",
+    "journal_roots",
     "project_roots",
     "queue_roots",
     "resource_roots",
@@ -48,6 +49,7 @@ class RoutingConfig:
     stopwords: frozenset[str]
     sensitive_destination_keys: frozenset[str]
     sensitive_path_prefixes: tuple[str, ...]
+    journal_roots: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -131,6 +133,7 @@ def load_routing_config(path: Path) -> RoutingConfig:
             _normalize_destination_key(key) for key in lists.get("sensitive_destination_keys", [])
         ),
         sensitive_path_prefixes=tuple(lists.get("sensitive_path_prefixes", [])),
+        journal_roots=tuple(lists.get("journal_roots", [])),
     )
 
 

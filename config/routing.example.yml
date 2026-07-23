@@ -42,6 +42,12 @@ generated_roots:
 archive_roots:
   - "Archive/"
 
+# Roots holding recurring dated logs (e.g. daily work reports).
+# Notes within the same journal root are never compared to each other
+# for semantic-duplicate detection, since recurring logs on the same
+# ongoing topic naturally share vocabulary without being duplicates.
+journal_roots: []
+
 disabled_destination_sections:
   - "generated"
 
