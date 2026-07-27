@@ -18,22 +18,17 @@ from .search import search_index
 from .structure import analyze_structure
 
 
+CONFIG_PATH = Path("config/brainiac.yml")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="brainiac")
-    parser.add_argument(
-        "--config",
-        type=Path,
-        default=Path("config/vault.yml"),
-        help="Path to Brainiac vault config.",
-    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    init_parser = subparsers.add_parser("init", help="Create an empty PARA vault and its local vault config.")
+    init_parser = subparsers.add_parser("init", help="Create an empty PARA vault and its local Brainiac installation.")
     init_parser.add_argument("--vault-root", type=Path, required=True, help="Empty directory for the new vault.")
 
     scan_parser = subparsers.add_parser("scan", help="Build a read-only vault inventory index.")
-    scan_parser.add_argument("--vault-root", type=Path, help="Override vault root from config.")
-    scan_parser.add_argument("--index", type=Path, help="Override SQLite index output path.")
     scan_parser.add_argument(
         "--full-rebuild",
         action="store_true",
@@ -48,28 +43,23 @@ def main(argv: list[str] | None = None) -> int:
 
     search_parser = subparsers.add_parser("search", help="Search the existing vault index.")
     search_parser.add_argument("query", help="Search query.")
-    search_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     search_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect one indexed vault path.")
     inspect_parser.add_argument("path", help="Vault-relative path to inspect.")
-    inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
 
     read_parser = subparsers.add_parser("read", help="Read one indexed vault path.")
     read_parser.add_argument("path", help="Vault-relative path to read.")
-    read_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     read_parser.add_argument("--section", help="Read only one Markdown section by heading text.")
     read_parser.add_argument("--max-chars", type=int, default=6000, help="Maximum characters to print.")
 
     related_parser = subparsers.add_parser("related", help="Find notes related to one indexed path.")
     related_parser.add_argument("path", help="Vault-relative path.")
-    related_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     related_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
     index_parser = subparsers.add_parser("index", help="Inspect index metadata and freshness.")
     index_subparsers = index_parser.add_subparsers(dest="index_command", required=True)
     index_info_parser = index_subparsers.add_parser("info", help="Show index metadata and optional filesystem drift.")
-    index_info_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     index_info_parser.add_argument(
         "--check-filesystem",
         action="store_true",
@@ -79,7 +69,6 @@ def main(argv: list[str] | None = None) -> int:
     route_parser = subparsers.add_parser("route", help="Dry-run route new content into the vault.")
     route_parser.add_argument("content", nargs="?", help="Content to route. Use --file for longer input.")
     route_parser.add_argument("--file", type=Path, help="Read content to route from a file.")
-    route_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     route_parser.add_argument("--limit", type=int, default=5, help="Maximum number of route candidates.")
 
     duplicates_parser = subparsers.add_parser(
@@ -88,7 +77,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     duplicates_parser.add_argument("content", nargs="?", help="Content to compare. Use --file for longer input.")
     duplicates_parser.add_argument("--file", type=Path, help="Read content to compare from a file.")
-    duplicates_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     duplicates_parser.add_argument("--limit", type=int, default=5, help="Maximum number of results.")
 
     duplicates_maintenance_parser = subparsers.add_parser(
@@ -103,7 +91,6 @@ def main(argv: list[str] | None = None) -> int:
         "list",
         help="List exact duplicate groups and their canonical candidates.",
     )
-    duplicates_list_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     duplicates_list_parser.add_argument("--limit", type=int, default=50, help="Maximum number of exact duplicate groups.")
 
     duplicates_inspect_parser = duplicates_subparsers.add_parser(
@@ -111,7 +98,6 @@ def main(argv: list[str] | None = None) -> int:
         help="Inspect one exact duplicate group by path or group id.",
     )
     duplicates_inspect_parser.add_argument("path_or_group", help="Indexed path or group id like sha256:abcd1234.")
-    duplicates_inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     duplicates_inspect_parser.add_argument(
         "--semantic-limit",
         type=int,
@@ -128,10 +114,8 @@ def main(argv: list[str] | None = None) -> int:
         "report",
         help="Report maintenance findings such as meaningful empty directories.",
     )
-    maintenance_report_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
 
     structure_parser = subparsers.add_parser("structure", help="Analyze canonical PARA roles and indexed profiles.")
-    structure_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
     structure_parser.add_argument("--limit", type=int, default=100, help="Maximum number of profiles.")
 
     args = parser.parse_args(argv)
@@ -168,21 +152,24 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _init(args: argparse.Namespace) -> int:
-    result = initialize_para_vault(args.vault_root, args.config)
+    result = initialize_para_vault(args.vault_root, CONFIG_PATH)
     print(f"Created PARA vault at {result.vault_root}")
     print("Created directories:")
     for directory in result.created_directories:
         print(f"  {directory.relative_to(result.vault_root).as_posix()}/")
-    print(f"Created vault config: {result.vault_config_path}")
-    print("Next: run `brainiac scan` with these local config paths.")
+    print(f"Created Brainiac config: {result.config_path}")
+    print(f"Created personal context: {result.personal_context_path}")
+    print(f"Created setup state: {result.setup_state_path}")
+    print(f"Created update state: {result.update_state_path}")
+    print("Next: complete setup through brainiac.md, then run `brainiac scan`.")
     return 0
 
 
 def _scan(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    config = _resolve_vault_config(config, args.vault_root, tuple(args.exclude))
+    config = _load_config()
+    config = _resolve_vault_config(config, tuple(args.exclude))
     config = _with_archive_excludes(config)
-    index_path = args.index or config.index_path
+    index_path = config.index_path
     result = scan_vault(config, full_rescan=args.full_rebuild)
     write_index(index_path, result)
 
@@ -199,19 +186,15 @@ def _scan(args: argparse.Namespace) -> int:
     return 0
 
 
-def _resolve_vault_config(config, vault_root_arg: Path | None, excludes: tuple[str, ...]):
+def _resolve_vault_config(config, excludes: tuple[str, ...]):
     normalized_excludes = tuple(_normalize_exclude(item) for item in excludes)
-    if vault_root_arg is not None:
-        return with_vault_overrides(config, root=vault_root_arg, exclude=config.exclude + normalized_excludes)
-    if config.root is not None:
-        return with_vault_overrides(config, exclude=config.exclude + normalized_excludes)
-    if not sys.stdin.isatty():
-        raise SystemExit("Vault root is not configured. Pass --vault-root or set vault.root in config/vault.yml.")
+    if config.root is None:
+        raise ValueError("vault.root is required in config/brainiac.yml.")
+    return with_vault_overrides(config, exclude=config.exclude + normalized_excludes)
 
-    vault_root = Path(input("Obsidian vault path: ").strip()).expanduser()
-    ignored = input("Folders to ignore, comma-separated (optional): ").strip()
-    extra_excludes = tuple(_normalize_exclude(item) for item in ignored.split(",") if item.strip())
-    return with_vault_overrides(config, root=vault_root, exclude=config.exclude + normalized_excludes + extra_excludes)
+
+def _load_config():
+    return load_vault_config(CONFIG_PATH)
 
 
 def _with_archive_excludes(config):
@@ -225,8 +208,8 @@ def _normalize_exclude(value: str) -> str:
 
 
 def _search(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     results = search_index(index_path, args.query, limit=args.limit)
     if not results:
         print("No results.")
@@ -239,8 +222,8 @@ def _search(args: argparse.Namespace) -> int:
 
 
 def _inspect(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     inspection = inspect_path(index_path, args.path)
     print(f"Path: {inspection.path}")
     print(f"Role: {inspection.role}")
@@ -277,15 +260,15 @@ def _inspect(args: argparse.Namespace) -> int:
 
 
 def _read(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     print(read_path(index_path, args.path, section=args.section, max_chars=args.max_chars))
     return 0
 
 
 def _related(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     results = related_paths(index_path, args.path, limit=args.limit)
     if not results:
         print("No related notes.")
@@ -297,9 +280,9 @@ def _related(args: argparse.Namespace) -> int:
 
 
 def _index(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
+    config = _load_config()
     config = _with_archive_excludes(config)
-    index_path = args.index or config.index_path
+    index_path = config.index_path
     if args.index_command == "info":
         info = read_index_info(index_path, config=config, check_filesystem=args.check_filesystem)
         print(f"Index: {index_path}")
@@ -347,9 +330,9 @@ def _index(args: argparse.Namespace) -> int:
 
 
 def _route(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
+    config = _load_config()
     require_para_layout(config.root)
-    index_path = args.index or config.index_path
+    index_path = config.index_path
     result = route_content(
         index_path,
         _content_arg(args.content, args.file),
@@ -380,8 +363,8 @@ def _route(args: argparse.Namespace) -> int:
 
 
 def _find_duplicates(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     results = find_duplicates(
         index_path,
         _content_arg(args.content, args.file),
@@ -397,8 +380,8 @@ def _find_duplicates(args: argparse.Namespace) -> int:
 
 
 def _duplicates(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     if args.duplicates_command == "list":
         groups = list_exact_duplicate_groups(index_path, limit=args.limit)
         if not groups:
@@ -443,9 +426,9 @@ def _duplicates(args: argparse.Namespace) -> int:
 
 
 def _maintenance(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
+    config = _load_config()
     config = _with_archive_excludes(config)
-    index_path = args.index or config.index_path
+    index_path = config.index_path
     if args.maintenance_command == "report":
         report = maintenance_report(
             index_path,
@@ -471,8 +454,8 @@ def _maintenance(args: argparse.Namespace) -> int:
 
 
 def _structure(args: argparse.Namespace) -> int:
-    config = load_vault_config(args.config)
-    index_path = args.index or config.index_path
+    config = _load_config()
+    index_path = config.index_path
     analysis = analyze_structure(index_path, max_profiles=args.limit)
     print("Role roots:")
     if not analysis.role_roots:

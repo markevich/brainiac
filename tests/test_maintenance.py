@@ -14,7 +14,7 @@ class MaintenanceTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault = tmp_path / "vault"
-            vault_config = tmp_path / "workspace" / "config" / "vault.yml"
+            vault_config = tmp_path / "workspace" / "config" / "brainiac.yml"
             initialize_para_vault(vault, vault_config)
             config = load_vault_config(vault_config)
             write_index(config.index_path, scan_vault(config))
@@ -27,7 +27,7 @@ class MaintenanceTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault = tmp_path / "vault"
-            vault_config = tmp_path / "workspace" / "config" / "vault.yml"
+            vault_config = tmp_path / "workspace" / "config" / "brainiac.yml"
             initialize_para_vault(vault, vault_config)
             (vault / "Resources" / "Food").mkdir()
             (vault / "Resources" / "Food" / "Coffee.md").write_text(

@@ -8,9 +8,16 @@ vault files -> incremental SQLite index -> bounded CLI tools -> Jarvis
 
 Markdown and structured files are truth. The index is an incremental, rebuildable cache. Brainiac is not an Obsidian clone.
 
+## Installation Layers
+
+- `brainiac.md` is the tracked shared LLM contract and update flow.
+- `brainiac_me.md` is the gitignored personal context and overrides shared instructions on conflicts.
+- `config/brainiac.yml` is the gitignored CLI config for one vault.
+- `.state/` contains resumable setup and weekly update-check state.
+
 ## Vault layout
 
-New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. The disposable SQLite index stays in the local Brainiac workspace, outside the vault. Existing vaults are migrated only through an explicit, reviewed migration plan; Brainiac never rearranges them automatically.
+New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. The disposable SQLite index stays in the local Brainiac workspace, outside the vault. Brainiac never rearranges an existing vault layout.
 
 ## Note roles
 
@@ -23,7 +30,7 @@ After a material source update, inspect its umbrella backlinks and propose an um
 
 ```bash
 PYTHONPATH=src python3 -m brainiac init --vault-root /path/to/new-vault
-PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/vault
+PYTHONPATH=src python3 -m brainiac scan
 PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 PYTHONPATH=src python3 -m brainiac search "query"
 PYTHONPATH=src python3 -m brainiac inspect path/to/note.md
@@ -36,4 +43,5 @@ PYTHONPATH=src python3 -m brainiac maintenance report
 PYTHONPATH=src python3 -m brainiac structure
 ```
 
-See [AGENTS.md](AGENTS.md), [SETUP.md](SETUP.md), [docs/brainiac-intro.md](docs/brainiac-intro.md), and [operator.md](operator.md).
+Read [brainiac.md](brainiac.md) for the shared LLM product and operating
+contract, and [SETUP.md](SETUP.md) for installation.

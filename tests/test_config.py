@@ -8,10 +8,13 @@ from brainiac.config import load_vault_config
 class VaultConfigTests(unittest.TestCase):
     def test_requires_explicit_para_layout(self):
         with TemporaryDirectory() as tmp:
-            config_path = Path(tmp) / "config" / "vault.yml"
+            config_path = Path(tmp) / "config" / "brainiac.yml"
             config_path.parent.mkdir()
             config_path.write_text(
                 """
+brainiac:
+  config_version: 1
+
 vault:
   name: "Test vault"
   root: "/tmp/test-vault"
@@ -28,10 +31,13 @@ index:
     def test_resolves_relative_index_path_from_local_workspace(self):
         with TemporaryDirectory() as tmp:
             workspace = Path(tmp) / "workspace"
-            config_path = workspace / "config" / "vault.yml"
+            config_path = workspace / "config" / "brainiac.yml"
             config_path.parent.mkdir(parents=True)
             config_path.write_text(
                 """
+brainiac:
+  config_version: 1
+
 vault:
   name: "Test vault"
   root: "/tmp/test-vault"
@@ -51,6 +57,28 @@ index:
 
             self.assertEqual(config.index_path, workspace / "memory" / "index" / "brainiac.sqlite")
             self.assertEqual(config.source_patterns, ("*.md",))
+
+    def test_rejects_an_unsupported_config_version(self):
+        with TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "config" / "brainiac.yml"
+            config_path.parent.mkdir()
+            config_path.write_text(
+                """
+brainiac:
+  config_version: 2
+
+vault:
+  root: "/tmp/test-vault"
+  layout: para
+
+index:
+  path: "memory/index/brainiac.sqlite"
+""",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "LLM upgrade flow"):
+                load_vault_config(config_path)
 
 
 if __name__ == "__main__":

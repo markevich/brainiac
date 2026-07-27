@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import redirect_stderr
 from io import StringIO
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -20,7 +21,7 @@ class ParaLayoutTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault_root = tmp_path / "vault"
-            vault_config = tmp_path / "workspace" / "config" / "vault.yml"
+            vault_config = tmp_path / "workspace" / "config" / "brainiac.yml"
             initialize_para_vault(vault_root, vault_config)
 
             self.assertEqual(validate_para_layout(vault_root), ())
@@ -29,7 +30,7 @@ class ParaLayoutTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault_root = tmp_path / "vault"
-            vault_config = tmp_path / "workspace" / "config" / "vault.yml"
+            vault_config = tmp_path / "workspace" / "config" / "brainiac.yml"
             initialize_para_vault(vault_root, vault_config)
             (vault_root / "Resources").rmdir()
             config = load_vault_config(vault_config)
@@ -46,20 +47,18 @@ class ParaLayoutTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault_root = tmp_path / "vault"
-            vault_config = tmp_path / "workspace" / "config" / "vault.yml"
+            vault_config = tmp_path / "workspace" / "config" / "brainiac.yml"
             initialize_para_vault(vault_root, vault_config)
             (vault_root / "Areas").rmdir()
 
             stderr = StringIO()
-            with redirect_stderr(stderr):
-                exit_code = main(
-                    [
-                        "--config",
-                        str(vault_config),
-                        "route",
-                        "# A note",
-                    ]
-                )
+            previous_directory = Path.cwd()
+            try:
+                os.chdir(vault_config.parent.parent)
+                with redirect_stderr(stderr):
+                    exit_code = main(["route", "# A note"])
+            finally:
+                os.chdir(previous_directory)
 
             self.assertEqual(exit_code, 1)
             self.assertIn("route is blocked", stderr.getvalue())
@@ -69,7 +68,7 @@ class ParaLayoutTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault_root = tmp_path / "vault"
-            vault_config = tmp_path / "workspace" / "config" / "vault.yml"
+            vault_config = tmp_path / "workspace" / "config" / "brainiac.yml"
             initialize_para_vault(vault_root, vault_config)
             (vault_root / "Resources").rmdir()
 
