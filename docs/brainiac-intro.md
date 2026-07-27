@@ -4,7 +4,11 @@ Brainiac is an AI-first local retrieval and maintenance backend over a plain-fil
 
 ## Vault layout
 
-The required layout for a new Brainiac-managed vault is PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. `Brainiac/` holds tool-owned indexes, logs, queues, and generated output. Existing vaults require an explicit migration plan; Brainiac must not move them automatically.
+The required layout for a new Brainiac-managed vault is PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. The disposable SQLite index stays in the local Brainiac workspace, outside the vault. Existing vaults require an explicit migration plan; Brainiac must not move them automatically.
+
+Create a new managed vault with `brainiac init --vault-root /path/to/new-vault`. The command refuses a non-empty destination and refuses to overwrite the local vault config.
+
+For a vault with `vault.layout: para`, `maintenance report` reports missing roots. `route` blocks new write suggestions until those violations are fixed. Read-only indexing and retrieval remain available. Route candidates are derived from indexed paths and IDF-weighted note evidence; there is no routing map to keep in sync.
 
 ## Note roles
 

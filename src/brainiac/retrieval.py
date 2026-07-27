@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .duplicates import canonical_duplicate_path, exact_duplicate_paths
-from .vault_roles import classify_note_role, classify_path_role, load_role_roots
+from .vault_roles import classify_note_role, classify_path_role, para_role_roots
 
 
 TOKEN_RE = re.compile(r"[\w/-]+", re.UNICODE)
@@ -57,13 +57,11 @@ class RelatedResult:
 def inspect_path(
     index_path: Path,
     note_path: str,
-    *,
-    routing_config_path: Path = Path("config/routing.yml"),
 ) -> Inspection:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     with closing(sqlite3.connect(index_path)) as connection:
-        role_roots = load_role_roots(routing_config_path)
+        role_roots = para_role_roots()
         file_row = connection.execute(
             """
             SELECT path, size_bytes, is_empty_note
@@ -189,7 +187,6 @@ def related_paths(
     note_path: str,
     *,
     limit: int = 10,
-    routing_config_path: Path = Path("config/routing.yml"),
 ) -> tuple[RelatedResult, ...]:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
@@ -198,7 +195,7 @@ def related_paths(
         if file_exists is None:
             raise FileNotFoundError(f"Path not found in index: {note_path}")
 
-        role_roots = load_role_roots(routing_config_path)
+        role_roots = para_role_roots()
         note_role = classify_path_role(note_path, role_roots)
         note_canonical_path = canonical_duplicate_path(connection, note_path, role_roots)
         scores: dict[str, int] = {}

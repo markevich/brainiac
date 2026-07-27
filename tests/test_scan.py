@@ -8,12 +8,11 @@ from tempfile import TemporaryDirectory
 from brainiac.config import VaultConfig
 from brainiac.cli import main
 from brainiac.index import write_index
-from brainiac.report import write_inventory_report
 from brainiac.scanner import scan_vault
 
 
 class ScanTest(unittest.TestCase):
-    def test_scan_writes_inventory_index_and_report(self):
+    def test_scan_writes_inventory_index(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault = tmp_path / "vault"
@@ -36,13 +35,10 @@ class ScanTest(unittest.TestCase):
                 exclude=(".obsidian/",),
                 source_patterns=("*.md", "*.json"),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             result = scan_vault(config)
             write_index(config.index_path, result)
-            report_path = config.generated_root / "reports" / "inventory.md"
-            write_inventory_report(config.index_path, report_path)
 
             with closing(sqlite3.connect(config.index_path)) as connection:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM files").fetchone()[0], 2)
@@ -77,12 +73,7 @@ class ScanTest(unittest.TestCase):
                     "Test topic",
                 )
 
-            report = report_path.read_text(encoding="utf-8")
-            self.assertIn("Brainiac Inventory Report", report)
-            self.assertIn("Missing", report)
-            self.assertIn("follow up", report)
-
-    def test_cli_scan_excludes_archive_roots_from_routing_config(self):
+    def test_cli_scan_excludes_canonical_para_archive(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault = tmp_path / "vault"
@@ -92,12 +83,12 @@ class ScanTest(unittest.TestCase):
             (vault / "Notes" / "Active.md").write_text("# Active\n\nsource copy\n", encoding="utf-8")
             vault_config = tmp_path / "vault.yml"
             index_path = tmp_path / "brainiac.sqlite"
-            generated_root = tmp_path / "generated"
             vault_config.write_text(
                 f"""
 vault:
   name: "Test vault"
   root: "{vault.as_posix()}"
+  layout: para
 
 exclude:
   - ".obsidian/"
@@ -106,31 +97,16 @@ source_formats:
   markdown:
     - "*.md"
 
-generated_paths:
-  root: "{generated_root.as_posix()}"
-
 index:
   path: "{index_path.as_posix()}"
 """,
                 encoding="utf-8",
             )
-            routing_config = tmp_path / "routing.yml"
-            routing_config.write_text(
-                """
-archive_roots:
-  - "Archive/"
-""",
-                encoding="utf-8",
-            )
-
             exit_code = main(
                 [
                     "--config",
                     vault_config.as_posix(),
                     "scan",
-                    "--routing-config",
-                    routing_config.as_posix(),
-                    "--no-report",
                 ]
             )
 
@@ -155,7 +131,6 @@ archive_roots:
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             result = scan_vault(config)
@@ -192,7 +167,6 @@ archive_roots:
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             first = scan_vault(config)
@@ -239,7 +213,6 @@ archive_roots:
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             write_index(config.index_path, scan_vault(config))

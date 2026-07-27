@@ -2,7 +2,7 @@
 
 ## Startup
 
-1. Read local vault, routing, and policy configs.
+1. Read the local vault config.
 2. Run `brainiac index info` and, when current state matters, `brainiac index info --check-filesystem`.
 3. Scan only if the index is missing or drift matters to the task.
 

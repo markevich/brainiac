@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .config import VaultConfig
 from .duplicates import list_exact_duplicate_groups
-from .routing import load_routing_config
+from .para import CANONICAL_ROOTS, validate_para_layout
 from .scanner import walk_source_files
 from .structure import analyze_structure
 from .vault_roles import (
@@ -18,8 +18,7 @@ from .vault_roles import (
     classify_path_role,
     has_explicit_role_marker,
     invalid_explicit_role_marker_values,
-    load_archive_roots,
-    load_role_roots,
+    para_role_roots,
 )
 
 
@@ -67,10 +66,6 @@ class MaintenanceReport:
         return sum(1 for finding in self.findings if finding.type == "missing_wikilink")
 
     @property
-    def unconfigured_profile_count(self) -> int:
-        return sum(1 for finding in self.findings if finding.type == "unconfigured_structure_profile")
-
-    @property
     def semantic_duplicate_count(self) -> int:
         return sum(1 for finding in self.findings if finding.type == "semantic_duplicate")
 
@@ -103,50 +98,58 @@ def maintenance_report(
     index_path: Path,
     *,
     config: VaultConfig,
-    routing_config_path: Path,
 ) -> MaintenanceReport:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     if config.root is None:
         raise ValueError("Vault root is not configured. Pass --vault-root or set vault.root.")
 
-    role_roots = load_role_roots(routing_config_path)
-    routing_config = load_routing_config(routing_config_path)
+    role_roots = para_role_roots()
     with closing(sqlite3.connect(index_path)) as connection:
-        findings = list(
+        findings = list(_para_layout_findings(config))
+        findings.extend(
             _empty_directory_findings(
                 connection,
                 config,
                 role_roots,
-                configured_folder_paths={
-                    destination.path
-                    for destination in routing_config.destinations
-                    if destination.path.endswith("/")
-                },
             )
         )
         findings.extend(
             _exact_duplicate_findings(
                 index_path,
-                routing_config_path,
             )
         )
         findings.extend(_ambiguous_wikilink_findings(connection))
         findings.extend(_missing_wikilink_findings(connection))
-        findings.extend(_unconfigured_profile_findings(index_path, routing_config_path))
         findings.extend(_invalid_role_marker_findings(index_path))
-        findings.extend(_missing_role_marker_findings(index_path, routing_config_path))
-        findings.extend(_semantic_duplicate_findings(index_path, routing_config_path))
+        findings.extend(_missing_role_marker_findings(index_path, role_roots))
+        findings.extend(_semantic_duplicate_findings(index_path))
     ordered = tuple(sorted(findings, key=lambda item: (_severity_rank(item.severity), item.path)))
     return MaintenanceReport(findings=ordered)
 
 
+def _para_layout_findings(config: VaultConfig) -> tuple[MaintenanceFinding, ...]:
+    if config.root is None:
+        return ()
+    return tuple(
+        MaintenanceFinding(
+            id=f"para_layout:{violation.type}:{violation.path.rstrip('/')}",
+            type=violation.type,
+            severity="high",
+            path=violation.path,
+            summary=violation.summary,
+            reasons=("vault.layout is para",),
+            suggested_action=violation.suggested_action,
+        )
+        for violation in validate_para_layout(config.root)
+    )
+
+
 def _exact_duplicate_findings(
     index_path: Path,
-    routing_config_path: Path,
 ) -> tuple[MaintenanceFinding, ...]:
     findings: list[MaintenanceFinding] = []
-    for group in list_exact_duplicate_groups(index_path, routing_config_path=routing_config_path, limit=200):
+    for group in list_exact_duplicate_groups(index_path, limit=200):
         reasons = [
             f"{len(group.paths)} files share the same Markdown content hash",
             f"canonical path: {group.canonical.path}",
@@ -224,32 +227,6 @@ def _missing_wikilink_findings(connection: sqlite3.Connection) -> tuple[Maintena
     return tuple(findings)
 
 
-def _unconfigured_profile_findings(
-    index_path: Path,
-    routing_config_path: Path,
-) -> tuple[MaintenanceFinding, ...]:
-    findings: list[MaintenanceFinding] = []
-    analysis = analyze_structure(index_path, routing_config_path, max_profiles=500)
-    for profile in analysis.unconfigured_profiles:
-        reasons = [f"{profile.note_count} indexed Markdown notes under {profile.path}"]
-        if profile.top_tags:
-            reasons.append(f"top tags: {', '.join(profile.top_tags[:5])}")
-        if profile.top_terms:
-            reasons.append(f"top terms: {', '.join(profile.top_terms[:5])}")
-        findings.append(
-            MaintenanceFinding(
-                id=f"unconfigured_structure_profile:{profile.role}:{profile.path.rstrip('/')}",
-                type="unconfigured_structure_profile",
-                severity="medium",
-                path=profile.path,
-                summary=f"Unconfigured {profile.role} profile",
-                reasons=tuple(reasons),
-                suggested_action=f"Add a routing destination or explicit structure mapping for {profile.path}.",
-            )
-        )
-    return tuple(findings)
-
-
 def _invalid_role_marker_findings(index_path: Path) -> tuple[MaintenanceFinding, ...]:
     findings: list[MaintenanceFinding] = []
     with closing(sqlite3.connect(index_path)) as connection:
@@ -283,10 +260,9 @@ def _invalid_role_marker_findings(index_path: Path) -> tuple[MaintenanceFinding,
 
 def _missing_role_marker_findings(
     index_path: Path,
-    routing_config_path: Path,
+    role_roots: tuple[RoleRoot, ...],
 ) -> tuple[MaintenanceFinding, ...]:
     findings: list[MaintenanceFinding] = []
-    role_roots = load_role_roots(routing_config_path)
     with closing(sqlite3.connect(index_path)) as connection:
         rows = connection.execute(
             """
@@ -323,14 +299,12 @@ def _missing_role_marker_findings(
     return tuple(findings)
 
 
-def _semantic_duplicate_findings(
-    index_path: Path,
-    routing_config_path: Path,
-) -> tuple[MaintenanceFinding, ...]:
+def _semantic_duplicate_findings(index_path: Path) -> tuple[MaintenanceFinding, ...]:
     findings: list[MaintenanceFinding] = []
-    routing_config = load_routing_config(routing_config_path)
-    role_roots = load_role_roots(routing_config_path)
-    archive_roots = load_archive_roots(routing_config_path)
+    important_terms = frozenset()
+    stopwords = frozenset()
+    role_roots = para_role_roots()
+    archive_roots = ("Archive/",)
     seen_pairs: set[tuple[str, str]] = set()
     with closing(sqlite3.connect(index_path)) as connection:
         rows = connection.execute(
@@ -343,13 +317,10 @@ def _semantic_duplicate_findings(
         ).fetchall()
         documents: list[_SemanticDocument] = []
         for path, title, headings, tags, tasks, body, sha256 in rows:
-            if _is_under_roots(path, archive_roots):
+            if _is_under_roots(path, archive_roots) or _is_archived_path(path):
                 continue
             note_role = classify_note_role(connection, path, role_roots)
-            if (
-                _is_internal_brainiac_artifact(path)
-                or note_role == "umbrella"
-            ):
+            if note_role == "umbrella":
                 continue
             if note_role == "source" and _is_umbrella_like_note(title, headings, tags, tasks, body):
                 continue
@@ -357,12 +328,12 @@ def _semantic_duplicate_findings(
                 _SemanticDocument(
                     path=path,
                     stem=Path(path).stem,
-                    title_key=_semantic_title_key(title or "", routing_config.important_terms),
+                    title_key=_semantic_title_key(title or "", important_terms),
                     terms=frozenset(
                         _semantic_terms(
                             _semantic_text(path, title, headings, tags, tasks, body),
-                            routing_config.important_terms,
-                            routing_config.stopwords,
+                            important_terms,
+                            stopwords,
                         )
                     ),
                     sha256=sha256,
@@ -385,7 +356,7 @@ def _semantic_duplicate_findings(
                 candidate_paths.update(by_title.get(document.title_key, set()))
             for term in document.terms:
                 term_paths = by_term.get(term, set())
-                if len(term_paths) <= high_frequency_limit or term in routing_config.important_terms:
+                if len(term_paths) <= high_frequency_limit or term in important_terms:
                     candidate_paths.update(term_paths)
             candidates = sorted(
                 (
@@ -550,12 +521,12 @@ def _keep_semantic_token(
     return len(normalized) > 2
 
 
-def _is_internal_brainiac_artifact(path: str) -> bool:
-    return path.startswith("Brainiac/memory/")
-
-
 def _is_under_roots(path: str, roots: tuple[str, ...]) -> bool:
     return any(path == root.rstrip("/") or path.startswith(root) for root in roots)
+
+
+def _is_archived_path(path: str) -> bool:
+    return any(part.casefold() in {"archive", "archives"} for part in Path(path).parts[:-1])
 
 
 def _is_umbrella_like_note(title: str, headings: str, tags: str, tasks: str, body: str) -> bool:
@@ -587,8 +558,6 @@ def _empty_directory_findings(
     connection: sqlite3.Connection,
     config: VaultConfig,
     role_roots: tuple[RoleRoot, ...],
-    *,
-    configured_folder_paths: set[str],
 ) -> tuple[MaintenanceFinding, ...]:
     source_files = walk_source_files(config)
     descendant_source_counts: dict[str, int] = {}
@@ -629,7 +598,6 @@ def _empty_directory_findings(
         finding = _empty_directory_finding(
             dir_key,
             role_roots,
-            configured_folder_paths=configured_folder_paths,
             indexed_paths=indexed_paths,
             direct_source_count=direct_source_counts.get(dir_key, 0),
         )
@@ -642,34 +610,23 @@ def _empty_directory_finding(
     dir_key: str,
     role_roots: tuple[RoleRoot, ...],
     *,
-    configured_folder_paths: set[str],
     indexed_paths: set[str],
     direct_source_count: int,
 ) -> MaintenanceFinding | None:
+    if dir_key in CANONICAL_ROOTS.values():
+        return None
+
     role = classify_path_role(dir_key, role_roots)
     reasons = ["directory has no source files under configured scan rules"]
     severity = "low"
     summary = "Empty directory"
     suggested_action = "Delete if obsolete, or add source notes if this folder should stay active."
 
-    if dir_key in configured_folder_paths:
-        severity = "high"
-        summary = "Empty configured destination"
-        reasons.append("directory is configured as a routing destination")
-        suggested_action = "Either populate this destination with source notes or remove/retarget it in routing config."
-    elif any(dir_key == root.path for root in role_roots):
-        role_name = next(root.role for root in role_roots if dir_key == root.path)
-        severity = "high"
-        summary = f"Empty configured {role_name} root"
-        reasons.append("directory is a configured role root")
-        suggested_action = "Either populate this role root or remove it from routing config."
-    elif role in {"area", "project", "resource"}:
+    if role in {"area", "project", "resource"}:
         severity = "medium"
         summary = f"Empty {role} directory"
         reasons.append(f"directory sits under the {role} role")
         suggested_action = "Delete if abandoned, or add the source notes that should live here."
-    elif role in {"generated", "queue"}:
-        return None
     elif _looks_user_facing(dir_key):
         summary = "Empty unclassified directory"
         suggested_action = "Delete if obsolete, or classify and populate it if it should become part of the vault structure."

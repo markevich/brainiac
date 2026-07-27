@@ -24,11 +24,11 @@ Rules:
 - Prefer CLI-first implementation before MCP, Obsidian plugin, or background daemon.
 - Treat indexes as disposable caches rebuildable from source files.
 - Start with structural and lexical retrieval before embeddings.
-- Keep write operations explicit, logged, and policy-checked.
+- Do not introduce vault write commands before an explicit review workflow exists.
 - Do not build an Obsidian clone.
 - Do not introduce autonomous rewrite behavior before dry-run/review workflows exist.
 - Use `PYTHONPATH=src python3 -m brainiac <command>` for CLI runs in this repo.
-- Use `uv run python -m unittest tests.test_maintenance tests.test_duplicates` for the default test pass; prefer `unittest` here unless the task explicitly needs `pytest`.
+- Use `uv run python -m unittest discover -s tests` for the default test pass; prefer `unittest` here unless the task explicitly needs `pytest`.
 
 ## Operator Mode
 
@@ -42,36 +42,29 @@ Rules:
 - Treat Markdown, SQLite, JSON, YAML, CSV, and source assets as truth.
 - Treat generated HTML as presentation only.
 - Ask before mutating sensitive domains such as health, family, finance, legal, credentials, or private operational data.
-- Log every write operation.
+- The current CLI has no vault write commands; preserve that boundary until a review workflow exists.
 - Treat `docs/operator-playbook.md` as the default procedural runbook for vault operations.
 
 ## Current Repository Shape
 
 ```text
 config/
-  vault.example.yml
-  routing.example.yml
   vault.yml        # local, gitignored
-  routing.yml      # local, gitignored
-  policies.yml
 docs/
   concept.md
   context-brief.md
   development-plan.md
   operator-context.md
-  source-takeaways.md
 src/brainiac/
   cli.py
   config.py
   scanner.py
   markdown.py
   index.py
-  report.py
+  bootstrap.py
+  para.py
 tests/
 memory/
-  generated/
-  queue/
   index/
-  logs/
 operator.md
 ```

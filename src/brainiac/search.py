@@ -24,7 +24,6 @@ def search_index(
     query: str,
     *,
     limit: int = 10,
-    routing_config_path: Path = Path("config/routing.yml"),
 ) -> tuple[SearchResult, ...]:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")

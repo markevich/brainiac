@@ -10,7 +10,7 @@ Markdown and structured files are truth. The index is an incremental, rebuildabl
 
 ## Vault layout
 
-New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. Tool-owned files live under `Brainiac/`. Existing vaults are migrated only through an explicit, reviewed migration plan; Brainiac never rearranges them automatically.
+New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`. The disposable SQLite index stays in the local Brainiac workspace, outside the vault. Existing vaults are migrated only through an explicit, reviewed migration plan; Brainiac never rearranges them automatically.
 
 ## Note roles
 
@@ -22,6 +22,7 @@ After a material source update, inspect its umbrella backlinks and propose an um
 ## Commands
 
 ```bash
+PYTHONPATH=src python3 -m brainiac init --vault-root /path/to/new-vault
 PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/vault
 PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 PYTHONPATH=src python3 -m brainiac search "query"

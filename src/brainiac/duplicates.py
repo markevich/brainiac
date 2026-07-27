@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .routing import DuplicateCandidate, find_duplicates
-from .vault_roles import RoleRoot, classify_path_role, load_role_roots
+from .vault_roles import RoleRoot, classify_path_role, para_role_roots
 
 
 @dataclass(frozen=True)
@@ -35,8 +35,6 @@ class DuplicateInspection:
 class _DuplicatePathAssessment:
     path: str
     role: str | None
-    generated_like: bool
-    queue_like: bool
     inbox_like: bool
     outgoing_links: int
     backlinks: int
@@ -49,10 +47,8 @@ class _DuplicatePathAssessment:
         return self.backlinks + self.outgoing_links
 
     @property
-    def sort_key(self) -> tuple[int, int, int, float, int, str]:
+    def sort_key(self) -> tuple[int, float, float, int, str]:
         return (
-            0 if self.generated_like else 1,
-            0 if self.queue_like else 1,
             0 if self.inbox_like else 1,
             float(self.connectivity),
             float(self.mtime),
@@ -117,13 +113,12 @@ def canonical_duplicate_details(
 def list_exact_duplicate_groups(
     index_path: Path,
     *,
-    routing_config_path: Path = Path("config/routing.yml"),
     limit: int = 50,
 ) -> tuple[ExactDuplicateGroup, ...]:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     with closing(sqlite3.connect(index_path)) as connection:
-        role_roots = load_role_roots(routing_config_path)
+        role_roots = para_role_roots()
         rows = connection.execute(
             """
             SELECT sha256
@@ -149,20 +144,18 @@ def inspect_duplicates(
     index_path: Path,
     path_or_group: str,
     *,
-    routing_config_path: Path = Path("config/routing.yml"),
     semantic_limit: int = 5,
 ) -> DuplicateInspection:
     if not index_path.exists():
         raise FileNotFoundError(f"Index not found: {index_path}. Run `brainiac scan` first.")
     with closing(sqlite3.connect(index_path)) as connection:
-        role_roots = load_role_roots(routing_config_path)
+        role_roots = para_role_roots()
         exact_group = _resolve_duplicate_group(connection, path_or_group, role_roots)
         seed_path = exact_group.canonical.path if exact_group is not None else _resolve_indexed_path(connection, path_or_group)
         semantic_candidates = find_duplicates(
             index_path,
             _indexed_duplicate_seed(connection, seed_path),
             limit=max(semantic_limit * 3, 10),
-            routing_config_path=routing_config_path,
         )
         excluded_paths = {seed_path}
         if exact_group is not None:
@@ -192,15 +185,11 @@ def _assess_duplicate_paths(
 
 def _build_assessment(path: str, role_roots: tuple[RoleRoot, ...], cache) -> _DuplicatePathAssessment:
     role = classify_path_role(path, role_roots)
-    generated_like = _contains_folder(path, "generated")
-    queue_like = _contains_folder(path, "queue")
     inbox_like = role == "inbox"
     role_rank = {
         "resource": 4,
         "project": 4,
-        "queue": 1,
         "inbox": 2,
-        "generated": 1,
         "area": 4,
         "unknown": 3,
         None: 3,
@@ -209,8 +198,6 @@ def _build_assessment(path: str, role_roots: tuple[RoleRoot, ...], cache) -> _Du
     return _DuplicatePathAssessment(
         path=path,
         role=role,
-        generated_like=generated_like,
-        queue_like=queue_like,
         inbox_like=inbox_like,
         outgoing_links=outgoing,
         backlinks=backlinks,
@@ -229,10 +216,6 @@ def _canonical_reasons(
         return ("only exact duplicate candidate in group",)
 
     reasons: list[str] = []
-    if not winner.generated_like and any(item.generated_like for item in others):
-        reasons.append("preferred over generated paths")
-    if not winner.queue_like and any(item.queue_like for item in others):
-        reasons.append("preferred over queue-like paths")
     if not winner.inbox_like and any(item.inbox_like for item in others):
         reasons.append("preferred over inbox paths")
     if winner.connectivity > max(item.connectivity for item in others):
