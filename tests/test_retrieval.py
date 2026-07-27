@@ -40,7 +40,6 @@ Other text.
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             write_index(config.index_path, scan_vault(config))
@@ -78,7 +77,6 @@ Other text.
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             write_index(config.index_path, scan_vault(config))
@@ -110,7 +108,6 @@ Other text.
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             write_index(config.index_path, scan_vault(config))
@@ -134,7 +131,6 @@ Other text.
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             write_index(config.index_path, scan_vault(config))
@@ -162,7 +158,6 @@ Other text.
                 exclude=(),
                 source_patterns=("*.md",),
                 index_path=tmp_path / "brainiac.sqlite",
-                generated_root=tmp_path / "generated",
             )
 
             write_index(config.index_path, scan_vault(config))

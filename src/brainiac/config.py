@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from shutil import copyfile
 
 
 @dataclass(frozen=True)
@@ -12,7 +11,7 @@ class VaultConfig:
     exclude: tuple[str, ...]
     source_patterns: tuple[str, ...]
     index_path: Path
-    generated_root: Path
+    layout: str = "para"
 
 
 def load_vault_config(path: Path) -> VaultConfig:
@@ -22,7 +21,11 @@ def load_vault_config(path: Path) -> VaultConfig:
     the current config shape: nested scalar keys and string lists.
     """
     if not path.exists():
-        _create_config_from_template(path)
+        raise FileNotFoundError(
+            f"Vault config not found: {path}. "
+            "Run `brainiac init --vault-root /path/to/new-vault` for a new PARA vault, "
+            "or provide an existing vault config."
+        )
 
     current_section: str | None = None
     values: dict[str, str] = {}
@@ -55,6 +58,9 @@ def load_vault_config(path: Path) -> VaultConfig:
     project_root = path.parent.parent
     vault_root_value = values.get("vault.root", "")
     vault_root = Path(vault_root_value).expanduser() if vault_root_value else None
+    layout = values.get("vault.layout", "").casefold().strip()
+    if layout != "para":
+        raise ValueError(f"Brainiac requires vault.layout: para in {path}.")
 
     return VaultConfig(
         name=values.get("vault.name", vault_root.name if vault_root else "Unknown vault"),
@@ -62,7 +68,7 @@ def load_vault_config(path: Path) -> VaultConfig:
         exclude=tuple(lists.get("exclude", [])),
         source_patterns=tuple(lists.get("source_formats", [])),
         index_path=_resolve_workspace_path(project_root, values["index.path"]),
-        generated_root=_resolve_workspace_path(project_root, values["generated_paths.root"]),
+        layout=layout,
     )
 
 
@@ -79,7 +85,7 @@ def with_vault_overrides(
         exclude=exclude if exclude is not None else config.exclude,
         source_patterns=config.source_patterns,
         index_path=config.index_path,
-        generated_root=config.generated_root,
+        layout=config.layout,
     )
 
 
@@ -94,13 +100,3 @@ def _unquote(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
         return value[1:-1]
     return value
-
-
-def _create_config_from_template(path: Path) -> None:
-    example_path = path.with_name("vault.example.yml")
-    if not example_path.exists():
-        raise FileNotFoundError(
-            f"Vault config not found: {path}. Template not found: {example_path}."
-        )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    copyfile(example_path, path)

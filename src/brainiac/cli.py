@@ -4,18 +4,18 @@ import argparse
 import sys
 from pathlib import Path
 
+from .bootstrap import initialize_para_vault
 from .config import load_vault_config, with_vault_overrides
 from .duplicates import inspect_duplicates, list_exact_duplicate_groups
 from .index import write_index
 from .index_status import read_index_info
 from .maintenance import maintenance_report
-from .report import write_inventory_report
+from .para import require_para_layout
 from .retrieval import inspect_path, read_path, related_paths
 from .routing import find_duplicates, route_content
 from .scanner import scan_vault
 from .search import search_index
 from .structure import analyze_structure
-from .vault_roles import load_archive_roots
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,17 +28,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    init_parser = subparsers.add_parser("init", help="Create an empty PARA vault and its local vault config.")
+    init_parser.add_argument("--vault-root", type=Path, required=True, help="Empty directory for the new vault.")
+
     scan_parser = subparsers.add_parser("scan", help="Build a read-only vault inventory index.")
     scan_parser.add_argument("--vault-root", type=Path, help="Override vault root from config.")
     scan_parser.add_argument("--index", type=Path, help="Override SQLite index output path.")
-    scan_parser.add_argument("--report", type=Path, help="Inventory report output path.")
-    scan_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config. Archive roots are excluded from scanning.",
-    )
-    scan_parser.add_argument("--no-report", action="store_true", help="Skip inventory report generation.")
     scan_parser.add_argument(
         "--full-rebuild",
         action="store_true",
@@ -54,23 +49,11 @@ def main(argv: list[str] | None = None) -> int:
     search_parser = subparsers.add_parser("search", help="Search the existing vault index.")
     search_parser.add_argument("query", help="Search query.")
     search_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    search_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     search_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
     inspect_parser = subparsers.add_parser("inspect", help="Inspect one indexed vault path.")
     inspect_parser.add_argument("path", help="Vault-relative path to inspect.")
     inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    inspect_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
 
     read_parser = subparsers.add_parser("read", help="Read one indexed vault path.")
     read_parser.add_argument("path", help="Vault-relative path to read.")
@@ -81,24 +64,12 @@ def main(argv: list[str] | None = None) -> int:
     related_parser = subparsers.add_parser("related", help="Find notes related to one indexed path.")
     related_parser.add_argument("path", help="Vault-relative path.")
     related_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    related_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     related_parser.add_argument("--limit", type=int, default=10, help="Maximum number of results.")
 
     index_parser = subparsers.add_parser("index", help="Inspect index metadata and freshness.")
     index_subparsers = index_parser.add_subparsers(dest="index_command", required=True)
     index_info_parser = index_subparsers.add_parser("info", help="Show index metadata and optional filesystem drift.")
     index_info_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    index_info_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config. Archive roots are excluded from filesystem checks.",
-    )
     index_info_parser.add_argument(
         "--check-filesystem",
         action="store_true",
@@ -109,12 +80,6 @@ def main(argv: list[str] | None = None) -> int:
     route_parser.add_argument("content", nargs="?", help="Content to route. Use --file for longer input.")
     route_parser.add_argument("--file", type=Path, help="Read content to route from a file.")
     route_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    route_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     route_parser.add_argument("--limit", type=int, default=5, help="Maximum number of route candidates.")
 
     duplicates_parser = subparsers.add_parser(
@@ -124,12 +89,6 @@ def main(argv: list[str] | None = None) -> int:
     duplicates_parser.add_argument("content", nargs="?", help="Content to compare. Use --file for longer input.")
     duplicates_parser.add_argument("--file", type=Path, help="Read content to compare from a file.")
     duplicates_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    duplicates_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     duplicates_parser.add_argument("--limit", type=int, default=5, help="Maximum number of results.")
 
     duplicates_maintenance_parser = subparsers.add_parser(
@@ -145,12 +104,6 @@ def main(argv: list[str] | None = None) -> int:
         help="List exact duplicate groups and their canonical candidates.",
     )
     duplicates_list_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    duplicates_list_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     duplicates_list_parser.add_argument("--limit", type=int, default=50, help="Maximum number of exact duplicate groups.")
 
     duplicates_inspect_parser = duplicates_subparsers.add_parser(
@@ -159,12 +112,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     duplicates_inspect_parser.add_argument("path_or_group", help="Indexed path or group id like sha256:abcd1234.")
     duplicates_inspect_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    duplicates_inspect_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     duplicates_inspect_parser.add_argument(
         "--semantic-limit",
         type=int,
@@ -182,25 +129,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Report maintenance findings such as meaningful empty directories.",
     )
     maintenance_report_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    maintenance_report_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
 
-    structure_parser = subparsers.add_parser("structure", help="Analyze configured vault roles and profiles.")
+    structure_parser = subparsers.add_parser("structure", help="Analyze canonical PARA roles and indexed profiles.")
     structure_parser.add_argument("--index", type=Path, help="Override SQLite index path.")
-    structure_parser.add_argument(
-        "--routing-config",
-        type=Path,
-        default=Path("config/routing.yml"),
-        help="Path to Brainiac routing config.",
-    )
     structure_parser.add_argument("--limit", type=int, default=100, help="Maximum number of profiles.")
 
     args = parser.parse_args(argv)
     try:
+        if args.command == "init":
+            return _init(args)
         if args.command == "scan":
             return _scan(args)
         if args.command == "search":
@@ -230,17 +167,24 @@ def main(argv: list[str] | None = None) -> int:
     return 2
 
 
+def _init(args: argparse.Namespace) -> int:
+    result = initialize_para_vault(args.vault_root, args.config)
+    print(f"Created PARA vault at {result.vault_root}")
+    print("Created directories:")
+    for directory in result.created_directories:
+        print(f"  {directory.relative_to(result.vault_root).as_posix()}/")
+    print(f"Created vault config: {result.vault_config_path}")
+    print("Next: run `brainiac scan` with these local config paths.")
+    return 0
+
+
 def _scan(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     config = _resolve_vault_config(config, args.vault_root, tuple(args.exclude))
-    config = _with_archive_excludes(config, args.routing_config)
+    config = _with_archive_excludes(config)
     index_path = args.index or config.index_path
-    report_path = args.report or (config.generated_root / "reports" / "inventory.md")
-
     result = scan_vault(config, full_rescan=args.full_rebuild)
     write_index(index_path, result)
-    if not args.no_report:
-        write_inventory_report(index_path, report_path)
 
     print(
         "Indexed "
@@ -252,8 +196,6 @@ def _scan(args: argparse.Namespace) -> int:
         f"{result.meta['scan_mode']}; changed files: {result.meta['changed_file_count']}; "
         f"deleted files: {result.meta['deleted_file_count']}; unchanged files: {result.meta['unchanged_file_count']}"
     )
-    if not args.no_report:
-        print(f"Wrote inventory report to {report_path}")
     return 0
 
 
@@ -272,9 +214,8 @@ def _resolve_vault_config(config, vault_root_arg: Path | None, excludes: tuple[s
     return with_vault_overrides(config, root=vault_root, exclude=config.exclude + normalized_excludes + extra_excludes)
 
 
-def _with_archive_excludes(config, routing_config_path: Path):
-    archive_excludes = load_archive_roots(routing_config_path)
-    merged = tuple(dict.fromkeys(config.exclude + archive_excludes))
+def _with_archive_excludes(config):
+    merged = tuple(dict.fromkeys(config.exclude + ("Archive/",)))
     return with_vault_overrides(config, exclude=merged)
 
 
@@ -286,7 +227,7 @@ def _normalize_exclude(value: str) -> str:
 def _search(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    results = search_index(index_path, args.query, limit=args.limit, routing_config_path=args.routing_config)
+    results = search_index(index_path, args.query, limit=args.limit)
     if not results:
         print("No results.")
         return 0
@@ -300,7 +241,7 @@ def _search(args: argparse.Namespace) -> int:
 def _inspect(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    inspection = inspect_path(index_path, args.path, routing_config_path=args.routing_config)
+    inspection = inspect_path(index_path, args.path)
     print(f"Path: {inspection.path}")
     print(f"Role: {inspection.role}")
     print(f"Size: {inspection.size_bytes} bytes")
@@ -345,7 +286,7 @@ def _read(args: argparse.Namespace) -> int:
 def _related(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    results = related_paths(index_path, args.path, limit=args.limit, routing_config_path=args.routing_config)
+    results = related_paths(index_path, args.path, limit=args.limit)
     if not results:
         print("No related notes.")
         return 0
@@ -357,8 +298,7 @@ def _related(args: argparse.Namespace) -> int:
 
 def _index(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
-    if getattr(args, "routing_config", None) is not None:
-        config = _with_archive_excludes(config, args.routing_config)
+    config = _with_archive_excludes(config)
     index_path = args.index or config.index_path
     if args.index_command == "info":
         info = read_index_info(index_path, config=config, check_filesystem=args.check_filesystem)
@@ -408,10 +348,10 @@ def _index(args: argparse.Namespace) -> int:
 
 def _route(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
+    require_para_layout(config.root)
     index_path = args.index or config.index_path
     result = route_content(
         index_path,
-        args.routing_config,
         _content_arg(args.content, args.file),
         limit=args.limit,
     )
@@ -430,9 +370,6 @@ def _route(args: argparse.Namespace) -> int:
         print(f"   reasons: {', '.join(candidate.reasons)}")
         print(f"   dry-run: {suggestion.action} {suggestion.path}")
         print(f"   link: {suggestion.link}")
-        if suggestion.policy == "review_required":
-            print("   policy: review_required before any write")
-
     print("Duplicate candidates:")
     if not result.duplicates:
         print("  No likely duplicates.")
@@ -449,7 +386,6 @@ def _find_duplicates(args: argparse.Namespace) -> int:
         index_path,
         _content_arg(args.content, args.file),
         limit=args.limit,
-        routing_config_path=args.routing_config,
     )
     if not results:
         print("No likely duplicates.")
@@ -464,7 +400,7 @@ def _duplicates(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
     if args.duplicates_command == "list":
-        groups = list_exact_duplicate_groups(index_path, routing_config_path=args.routing_config, limit=args.limit)
+        groups = list_exact_duplicate_groups(index_path, limit=args.limit)
         if not groups:
             print("No exact duplicate groups.")
             return 0
@@ -481,7 +417,6 @@ def _duplicates(args: argparse.Namespace) -> int:
         inspection = inspect_duplicates(
             index_path,
             args.path_or_group,
-            routing_config_path=args.routing_config,
             semantic_limit=args.semantic_limit,
         )
         print(f"Query: {inspection.query}")
@@ -509,20 +444,18 @@ def _duplicates(args: argparse.Namespace) -> int:
 
 def _maintenance(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
-    config = _with_archive_excludes(config, args.routing_config)
+    config = _with_archive_excludes(config)
     index_path = args.index or config.index_path
     if args.maintenance_command == "report":
         report = maintenance_report(
             index_path,
             config=config,
-            routing_config_path=args.routing_config,
         )
         print(f"Findings: {len(report.findings)}")
         print(f"Empty directories: {report.empty_directory_count}")
         print(f"Exact duplicate groups: {report.exact_duplicate_count}")
         print(f"Ambiguous wikilinks: {report.ambiguous_wikilink_count}")
         print(f"Missing wikilinks: {report.missing_wikilink_count}")
-        print(f"Unconfigured profiles: {report.unconfigured_profile_count}")
         print(f"Semantic duplicates: {report.semantic_duplicate_count}")
         if not report.findings:
             print("No maintenance findings.")
@@ -540,7 +473,7 @@ def _maintenance(args: argparse.Namespace) -> int:
 def _structure(args: argparse.Namespace) -> int:
     config = load_vault_config(args.config)
     index_path = args.index or config.index_path
-    analysis = analyze_structure(index_path, args.routing_config, max_profiles=args.limit)
+    analysis = analyze_structure(index_path, max_profiles=args.limit)
     print("Role roots:")
     if not analysis.role_roots:
         print("  No role roots configured.")
@@ -551,11 +484,9 @@ def _structure(args: argparse.Namespace) -> int:
     if not analysis.profiles:
         print("  No profiles found.")
     for profile in analysis.profiles:
-        configured = "route-configured" if profile.configured else "route-missing"
-        sensitive = ", sensitive" if profile.sensitive else ""
         print(
             f"  {profile.role}: {profile.path} "
-            f"({profile.note_count} notes, {profile.file_count} files, {configured}{sensitive})"
+            f"({profile.note_count} notes, {profile.file_count} files)"
         )
         if profile.top_tags:
             print(f"    tags: {', '.join(profile.top_tags)}")
@@ -564,17 +495,6 @@ def _structure(args: argparse.Namespace) -> int:
         if profile.representative_notes:
             print(f"    examples: {', '.join(profile.representative_notes[:3])}")
 
-    print("Unconfigured profiles:")
-    if not analysis.unconfigured_profiles:
-        print("  None.")
-    for profile in analysis.unconfigured_profiles:
-        print(f"  {profile.role}: {profile.path} ({profile.note_count} notes)")
-
-    print("Recommendations:")
-    if not analysis.recommendations:
-        print("  None.")
-    for recommendation in analysis.recommendations:
-        print(f"  - {recommendation}")
     return 0
 
 

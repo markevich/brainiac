@@ -8,8 +8,7 @@ Goal: define what Brainiac is and what it is not.
 
 - [x] Create repository skeleton.
 - [x] Write the core concept and operator contract.
-- [x] Define initial vault, routing, and policy configs.
-- [x] Add operation logging and a Codex/agent entrypoint.
+- [x] Define the local vault config and Codex/agent entrypoint.
 - [x] Split development context from operator context.
 
 Exit criterion: a future AI session can read `README.md`, `operator.md`, and `docs/concept.md` and understand the project.
@@ -30,7 +29,7 @@ Completed work:
 - [x] Scan a vault path and collect files, paths, sizes, mtimes, hashes, and empty-note state.
 - [x] Extract headings, wikilinks, tags, tasks, Markdown frontmatter, and searchable text.
 - [x] Classify resolved, missing, and ambiguous wikilinks.
-- [x] Store inventory in SQLite and generate an inventory report.
+- [x] Store inventory in SQLite.
 
 Exit criterion: Brainiac can answer “what is in this vault?” without loading the vault into model context.
 
@@ -65,14 +64,12 @@ PYTHONPATH=src python3 -m brainiac related path/to/note.md
 
 Goal: help place new information into the vault without writing automatically.
 
-- [x] Define routing rules in `config/routing.yml`.
-- [x] Implement `route(content)` with scored candidate destinations and reasons.
+- [x] Implement `route(content)` from indexed PARA profiles with scored candidates and reasons.
 - [x] Implement lexical and metadata duplicate diagnostics.
 - [x] Produce dry-run create, update, or review suggestions.
 - [x] Detect title and basename collisions before a proposed write.
 - [x] Generate shortest unique wikilinks for Brainiac-created suggestions.
-- [x] Keep sensitive destinations and short domain tokens in config rather than source code.
-- [x] Log real write operations outside the router.
+- [x] Keep route suggestions dry-run only; the CLI has no vault write operation.
 
 Exit criterion: given a new note or inbox item, Brainiac can suggest a destination and overlapping notes without proposing ambiguous links or blind creates.
 
@@ -88,25 +85,33 @@ Goal: make PARA the required layout for new Brainiac-managed vaults while keepin
 
 Completed work:
 
-- [x] Define configurable roots for inbox, projects, areas, resources, archive, generated output, and queue as a compatibility layer.
-- [x] Add routing config for role roots, sensitive domains, important short tokens, and disabled destinations.
-- [x] Generate compact area/project/resource profiles: path, role, note and file counts, tags, terms, representative notes, routing coverage, and sensitivity.
-- [x] Add `brainiac structure` and maintenance findings for unconfigured profiles.
-- [x] Use profile findings to make local routing destinations explicit.
+- [x] Define the five canonical PARA roots: inbox, projects, areas, resources, and archive.
+- [x] Route from indexed path profiles rather than a duplicated routing map.
+- [x] Generate compact area/project/resource profiles: path, role, note and file counts, tags, terms, and representative notes.
+- [x] Add `brainiac structure` for profile inspection.
 
 Required work:
 
-- [ ] Document the PARA decision and exact meanings of `Inbox/`, `Projects/`, `Areas/`, `Resources/`, `Archive/`, and `Brainiac/`.
-- [ ] Add a new-vault bootstrap and config validation that require the canonical PARA roots.
-- [ ] Restrict routing for new managed vaults to the canonical roots.
-- [ ] Make `structure` and `maintenance` report PARA-compliance rather than merely unconfigured profiles.
+- [x] Document the PARA decision and exact meanings of `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and `Archive/`.
+- [x] Add `brainiac init` to bootstrap an empty vault with the canonical PARA roots and local configuration.
+- [x] Make `init` the only automatic new-vault onboarding path; never create legacy configs implicitly.
+- [x] Validate a managed vault against the canonical PARA roots without a duplicate routing map.
+- [x] Restrict routing for new managed vaults to the canonical roots.
+- [x] Make `maintenance report` report PARA-compliance violations.
 - [ ] Build a dry-run migration planner for existing vaults that maps current paths to PARA targets, detects collisions and sensitive paths, and never moves files.
 - [ ] Require explicit confirmation before any later migration apply workflow.
 
 Deferred, evidence-driven enhancements:
 
 - [ ] Add optional recent-activity summaries and aliases/domain hints.
-- [ ] Use profile evidence as an additional routing signal when observed routing failures justify it.
+- [x] Route from indexed PARA profiles using IDF-weighted lexical evidence and Inbox fallback; keep exact-duplicate detection separate from topical evidence.
+
+Deferred configuration compatibility:
+
+- [ ] Enforce the versioned `vault.yml` contract and define a deliberate upgrade path.
+- [ ] Surface an available config upgrade without rewriting user files during ordinary commands.
+- [ ] Implement `brainiac config upgrade --dry-run` with exact per-file changes and an explicit `--apply` mode that creates backups.
+- [ ] Keep path/layout migrations review-only when they cannot be safely expressed as a config-only upgrade.
 
 Exit criteria:
 
@@ -158,12 +163,12 @@ Completed work:
 - [x] Surface canonical paths in `inspect` and use them in related-note retrieval.
 - [x] Separate exact duplicate groups from semantic-overlap candidates.
 - [x] Provide `duplicates list` and bounded duplicate inspection.
-- [x] Provide `maintenance report` for empty directories, ambiguous and missing links, unconfigured profiles, role markers, duplicate groups, and semantic candidates.
+- [x] Provide `maintenance report` for empty directories, ambiguous and missing links, role markers, duplicate groups, and semantic candidates.
 - [x] Keep the normal loop lightweight: report → operator review/edit → scan → report.
 
 Remaining work:
 
-- [ ] Add an optional batch-maintenance assistant that can draft multiple low-risk edits, log writes, and revalidate afterwards.
+- [ ] Add an optional batch-maintenance assistant that can draft multiple low-risk edits and revalidate afterwards.
 - [ ] Define a compact format for recording a semantic-duplicate resolution without forcing any merge or deletion.
 
 Exit criteria:
@@ -219,8 +224,8 @@ Goal: expose a stable CLI surface as proper AI tools once it has been proven man
 
 - [ ] Decide MCP versus local HTTP only after CLI workflows stabilize.
 - [ ] Wrap stable read commands as tools.
-- [ ] Add explicit, policy-checked write operations only when the review workflow is mature.
-- [ ] Preserve operation logs and sensitive-domain checks.
+- [ ] Add explicit review-gated write operations only when the review workflow is mature.
+- [ ] Define policy enforcement and sensitive-domain checks before the first write command.
 
 Exit criterion: an operator can use Brainiac as a tool provider without losing bounded retrieval or write safety.
 
@@ -231,7 +236,7 @@ Goal: improve the Obsidian experience without making Obsidian the backend.
 - [ ] Evaluate Local REST API versus a small plugin.
 - [ ] Add “route current note” and “show related notes” workflows only if the CLI equivalents prove useful.
 - [ ] Optionally read Obsidian metadata cache where it adds value.
-- [ ] Open generated reports or focused notes as a convenience, not as source of truth.
+- [ ] Open focused notes as a convenience, not as source of truth.
 
 Exit criterion: Brainiac is more convenient inside Obsidian while staying a plain-file system.
 
@@ -240,7 +245,7 @@ Exit criterion: Brainiac is more convenient inside Obsidian while staying a plai
 Goal: add automation only after manual maintenance and retrieval workflows are demonstrably useful.
 
 - [ ] Offer scheduled or explicit maintenance reports without notification spam.
-- [ ] Detect stale generated artifacts and unsupported links.
+- [ ] Detect unsupported links and other bounded maintenance findings.
 - [ ] Detect likely umbrella updates from changed linked sources, but always propose rather than rewrite.
 - [ ] Add a first-class LLM batch-edit helper only after dry-run and post-edit validation are trusted.
 - [ ] Provide simple reindex and validation commands after edits.
