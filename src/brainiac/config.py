@@ -4,6 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+CURRENT_CONFIG_VERSION = 1
+
+
 @dataclass(frozen=True)
 class VaultConfig:
     name: str
@@ -12,19 +15,20 @@ class VaultConfig:
     source_patterns: tuple[str, ...]
     index_path: Path
     layout: str = "para"
+    config_version: int = 1
 
 
 def load_vault_config(path: Path) -> VaultConfig:
-    """Load the small YAML subset used by config/vault.yml.
+    """Load the small YAML subset used by config/brainiac.yml.
 
     Brainiac intentionally has no runtime dependency yet. This parser supports
     the current config shape: nested scalar keys and string lists.
     """
     if not path.exists():
         raise FileNotFoundError(
-            f"Vault config not found: {path}. "
+            f"Brainiac config not found: {path}. "
             "Run `brainiac init --vault-root /path/to/new-vault` for a new PARA vault, "
-            "or provide an existing vault config."
+            "or provide config/brainiac.yml."
         )
 
     current_section: str | None = None
@@ -56,6 +60,12 @@ def load_vault_config(path: Path) -> VaultConfig:
         values[full_key] = _unquote(value.strip())
 
     project_root = path.parent.parent
+    config_version_value = values.get("brainiac.config_version", "")
+    if not config_version_value.isdigit() or int(config_version_value) != CURRENT_CONFIG_VERSION:
+        raise ValueError(
+            f"Brainiac requires brainiac.config_version: {CURRENT_CONFIG_VERSION} in {path}. "
+            "Use the LLM upgrade flow before running CLI commands."
+        )
     vault_root_value = values.get("vault.root", "")
     vault_root = Path(vault_root_value).expanduser() if vault_root_value else None
     layout = values.get("vault.layout", "").casefold().strip()
@@ -69,6 +79,7 @@ def load_vault_config(path: Path) -> VaultConfig:
         source_patterns=tuple(lists.get("source_formats", [])),
         index_path=_resolve_workspace_path(project_root, values["index.path"]),
         layout=layout,
+        config_version=int(config_version_value),
     )
 
 
@@ -86,6 +97,7 @@ def with_vault_overrides(
         source_patterns=config.source_patterns,
         index_path=config.index_path,
         layout=config.layout,
+        config_version=config.config_version,
     )
 
 

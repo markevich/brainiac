@@ -11,7 +11,7 @@ Goal: define what Brainiac is and what it is not.
 - [x] Define the local vault config and Codex/agent entrypoint.
 - [x] Split development context from operator context.
 
-Exit criterion: a future AI session can read `README.md`, `operator.md`, and `docs/concept.md` and understand the project.
+Exit criterion: a future AI session can read `brainiac.md` and understand the project.
 
 ## Phase 1: Read-only Vault Inventory — complete
 
@@ -34,7 +34,7 @@ Completed work:
 Exit criterion: Brainiac can answer “what is in this vault?” without loading the vault into model context.
 
 ```bash
-PYTHONPATH=src python3 -m brainiac scan --vault-root /path/to/vault
+PYTHONPATH=src python3 -m brainiac scan
 PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 ```
 
@@ -79,9 +79,9 @@ PYTHONPATH=src python3 -m brainiac route --file /path/to/draft.md
 PYTHONPATH=src python3 -m brainiac find-duplicates "# New note..."
 ```
 
-## Phase 4: Enforced PARA Vault Structure — current focus
+## Phase 4: Enforced PARA Vault Structure — complete baseline
 
-Goal: make PARA the required layout for new Brainiac-managed vaults while keeping existing-vault migration explicit and safe.
+Goal: make PARA the required layout for new Brainiac-managed vaults without supporting existing-layout migration.
 
 Completed work:
 
@@ -98,31 +98,43 @@ Required work:
 - [x] Validate a managed vault against the canonical PARA roots without a duplicate routing map.
 - [x] Restrict routing for new managed vaults to the canonical roots.
 - [x] Make `maintenance report` report PARA-compliance violations.
-- [ ] Build a dry-run migration planner for existing vaults that maps current paths to PARA targets, detects collisions and sensitive paths, and never moves files.
-- [ ] Require explicit confirmation before any later migration apply workflow.
+Existing-vault layout migration is out of scope for the current single-user product. Reconsider it only if onboarding older vaults becomes a supported workflow.
 
 Deferred, evidence-driven enhancements:
 
 - [ ] Add optional recent-activity summaries and aliases/domain hints.
 - [x] Route from indexed PARA profiles using IDF-weighted lexical evidence and Inbox fallback; keep exact-duplicate detection separate from topical evidence.
 
-Deferred configuration compatibility:
-
-- [ ] Enforce the versioned `vault.yml` contract and define a deliberate upgrade path.
-- [ ] Surface an available config upgrade without rewriting user files during ordinary commands.
-- [ ] Implement `brainiac config upgrade --dry-run` with exact per-file changes and an explicit `--apply` mode that creates backups.
-- [ ] Keep path/layout migrations review-only when they cannot be safely expressed as a config-only upgrade.
-
 Exit criteria:
 
 - A new Brainiac vault is created and validated with the canonical PARA roots.
 - Routing proposes destinations only within those roots.
-- An existing vault receives a bounded migration proposal without any automatic move.
+- Existing vault layouts are never changed by Brainiac.
 - Source code contains no user-specific vault assumptions.
 
 ```bash
 PYTHONPATH=src python3 -m brainiac structure
 ```
+
+## Phase 4.5: Installation and LLM Update Flow — complete baseline
+
+Goal: make a Brainiac installation resumable and safely updateable without a Python migration engine.
+
+- [x] Define tracked shared instructions in `brainiac.md` and gitignored personal overrides in `brainiac_me.md`.
+- [x] Create `config/brainiac.yml` as the only CLI configuration path.
+- [x] Bootstrap personal context plus `.state/setup.yml` and `.state/update_check.yml` with `brainiac init`.
+- [x] Add an LLM setup wizard that resumes from setup state.
+- [x] Define a weekly Git update check that asks before `git pull --ff-only`.
+- [x] Define versioned LLM upgrade orchestration with `upgrade.md`, `CHANGELOG.md`, and small changelog ranges.
+- [x] Use `installed_version` as the final completion marker after migration validation.
+
+Exit criteria:
+
+- A new installation has all shared, personal, machine, and runtime layers.
+- An interrupted setup resumes without starting over.
+- An available Git update is detected periodically but never pulled without approval.
+- A version mismatch is migrated through documented idempotent LLM steps that
+  verify and safely skip already-completed work after failure.
 
 ## Phase 5: Source and Umbrella Operation — complete baseline
 
@@ -181,7 +193,7 @@ PYTHONPATH=src python3 -m brainiac duplicates list
 PYTHONPATH=src python3 -m brainiac maintenance report
 ```
 
-## Phase 6: Field Validation of the Operator Loop
+## Phase 6: Field Validation of the Operator Loop — current focus
 
 Goal: prove that the existing CLI and source/umbrella model help in real work before adding retrieval complexity.
 

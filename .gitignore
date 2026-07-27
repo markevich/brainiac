@@ -2,5 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 uv.lock
-config/vault.yml
+config/brainiac.yml
+brainiac_me.md
+.state/
 memory/index/*.sqlite

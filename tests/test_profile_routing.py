@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -88,25 +89,29 @@ class ProfileRoutingTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             vault = tmp_path / "vault"
-            config = tmp_path / "workspace" / "config" / "vault.yml"
-            self.assertEqual(main(["--config", str(config), "init", "--vault-root", str(vault)]), 0)
-            self.assertFalse((config.parent / "routing.yml").exists())
-            destination = vault / "Resources" / "Food" / "Cafes" / "Tbilisi"
-            destination.mkdir(parents=True)
-            (destination / "Entree.md").write_text(
-                "# Entree\n\nTbilisi coffee breakfast pastries.\n", encoding="utf-8"
-            )
-
-            self.assertEqual(main(["--config", str(config), "scan"]), 0)
-            output = StringIO()
-            with redirect_stdout(output):
-                self.assertEqual(
-                    main([
-                        "--config", str(config), "route",
-                        "# Coffee tomorrow\n\nTbilisi coffee breakfast pastries.",
-                    ]),
-                    0,
+            workspace = tmp_path / "workspace"
+            workspace.mkdir()
+            previous_directory = Path.cwd()
+            try:
+                os.chdir(workspace)
+                self.assertEqual(main(["init", "--vault-root", str(vault)]), 0)
+                config = workspace / "config" / "brainiac.yml"
+                self.assertFalse((config.parent / "routing.yml").exists())
+                destination = vault / "Resources" / "Food" / "Cafes" / "Tbilisi"
+                destination.mkdir(parents=True)
+                (destination / "Entree.md").write_text(
+                    "# Entree\n\nTbilisi coffee breakfast pastries.\n", encoding="utf-8"
                 )
+
+                self.assertEqual(main(["scan"]), 0)
+                output = StringIO()
+                with redirect_stdout(output):
+                    self.assertEqual(
+                        main(["route", "# Coffee tomorrow\n\nTbilisi coffee breakfast pastries."]),
+                        0,
+                    )
+            finally:
+                os.chdir(previous_directory)
             self.assertIn("Resources/Food/Cafes/Tbilisi/", output.getvalue())
 
 

@@ -1,7 +1,7 @@
 import sqlite3
 import unittest
 from contextlib import closing
-from os import utime
+from os import chdir, getcwd, utime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -81,7 +81,9 @@ class ScanTest(unittest.TestCase):
             (vault / "Notes").mkdir()
             (vault / "Archive" / "Old.md").write_text("# Old\n\narchive copy\n", encoding="utf-8")
             (vault / "Notes" / "Active.md").write_text("# Active\n\nsource copy\n", encoding="utf-8")
-            vault_config = tmp_path / "vault.yml"
+            workspace = tmp_path / "workspace"
+            (workspace / "config").mkdir(parents=True)
+            vault_config = workspace / "config" / "brainiac.yml"
             index_path = tmp_path / "brainiac.sqlite"
             vault_config.write_text(
                 f"""
@@ -89,6 +91,9 @@ vault:
   name: "Test vault"
   root: "{vault.as_posix()}"
   layout: para
+
+brainiac:
+  config_version: 1
 
 exclude:
   - ".obsidian/"
@@ -102,13 +107,12 @@ index:
 """,
                 encoding="utf-8",
             )
-            exit_code = main(
-                [
-                    "--config",
-                    vault_config.as_posix(),
-                    "scan",
-                ]
-            )
+            previous_directory = getcwd()
+            try:
+                chdir(workspace)
+                exit_code = main(["scan"])
+            finally:
+                chdir(previous_directory)
 
             self.assertEqual(exit_code, 0)
             with closing(sqlite3.connect(index_path)) as connection:
