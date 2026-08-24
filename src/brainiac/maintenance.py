@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 import sqlite3
 from contextlib import closing
@@ -32,6 +33,36 @@ TOOLING_SEGMENTS = {
     ".svn",
 }
 WORD_RE = re.compile(r"[^\W_]+", re.UNICODE)
+URL_RE = re.compile(r"(?:https?://|www\.)\S+", re.IGNORECASE)
+
+# Duplicate detection is intentionally conservative: its job is to surface
+# review candidates, not to equate notes with a shared date or URL.
+MIN_INFORMATIVE_TERMS = 6
+MIN_SHARED_INFORMATIVE_TERMS = 2
+MIN_TFIDF_COSINE = 0.55
+MAX_DOCUMENT_FREQUENCY_RATIO = 0.10
+MIN_HIGH_FREQUENCY_DOCUMENTS = 5
+GENERIC_TITLE_TERMS = frozenset({"link", "links", "note", "notes", "todo", "ссылка", "ссылки", "заметка", "заметки"})
+SEMANTIC_STOPWORDS = frozenset(
+    {
+        "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "can", "could", "did", "do",
+        "does", "for", "from", "had", "has", "have", "he", "her", "here", "him", "his", "how", "if",
+        "in", "into", "is", "it", "its", "just", "like", "may", "me", "more", "most", "my", "no", "not",
+        "of", "on", "or", "our", "out", "she", "so", "some", "than", "that", "the", "their", "them", "then",
+        "there", "these", "they", "this", "those", "to", "too", "up", "us", "was", "we", "were", "what", "when",
+        "where", "which", "who", "will", "with", "would", "you", "your",
+        "и", "в", "во", "не", "на", "что", "я", "с", "со", "как", "а", "то", "все", "она", "так", "его", "но",
+        "да", "ты", "к", "у", "же", "вы", "за", "бы", "по", "только", "ее", "мне", "было", "вот", "от", "меня",
+        "еще", "нет", "из", "ему", "когда", "даже", "если", "уже", "или", "ни", "быть", "был", "него", "до", "вас",
+        "опять", "вам", "ведь", "там", "потом", "себя", "ничего", "ей", "может", "они", "тут", "где", "есть", "надо",
+        "для", "мы", "тебя", "их", "чем", "была", "сам", "чтоб", "без", "будет", "тогда", "кто", "этот", "того",
+        "потому", "этого", "какой", "совсем", "ним", "здесь", "этом", "один", "почти", "мой", "тем", "чтобы", "нее",
+        "сейчас", "были", "куда", "зачем", "сказать", "всех", "никогда", "сегодня", "можно", "при", "наконец", "два",
+        "об", "другой", "хоть", "после", "над", "больше", "тот", "через", "эти", "нас", "про", "всего", "них", "какая",
+        "много", "разве", "три", "эту", "моя", "впрочем", "чуть", "том", "нельзя", "такой", "более", "всегда", "конечно",
+        "всю", "между",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -301,8 +332,6 @@ def _missing_role_marker_findings(
 
 def _semantic_duplicate_findings(index_path: Path) -> tuple[MaintenanceFinding, ...]:
     findings: list[MaintenanceFinding] = []
-    important_terms = frozenset()
-    stopwords = frozenset()
     role_roots = para_role_roots()
     archive_roots = ("Archive/",)
     seen_pairs: set[tuple[str, str]] = set()
@@ -328,39 +357,50 @@ def _semantic_duplicate_findings(index_path: Path) -> tuple[MaintenanceFinding, 
                 _SemanticDocument(
                     path=path,
                     stem=Path(path).stem,
-                    title_key=_semantic_title_key(title or "", important_terms),
-                    terms=frozenset(
-                        _semantic_terms(
-                            _semantic_text(path, title, headings, tags, tasks, body),
-                            important_terms,
-                            stopwords,
-                        )
-                    ),
+                    title_key=_semantic_title_key(title or ""),
+                    terms=frozenset(_semantic_terms(_semantic_text(path, title, headings, tags, tasks, body))),
                     sha256=sha256,
                 )
             )
 
+        document_frequency = _document_frequency(documents)
+        high_frequency_limit = max(
+            MIN_HIGH_FREQUENCY_DOCUMENTS,
+            math.ceil(len(documents) * MAX_DOCUMENT_FREQUENCY_RATIO),
+        )
+        documents = [
+            _SemanticDocument(
+                path=document.path,
+                stem=document.stem,
+                title_key=document.title_key,
+                terms=frozenset(
+                    term for term in document.terms if document_frequency[term] <= high_frequency_limit
+                ),
+                sha256=document.sha256,
+            )
+            for document in documents
+        ]
         by_path = {document.path: document for document in documents}
         by_title: dict[str, set[str]] = {}
         by_term: dict[str, set[str]] = {}
         for document in documents:
-            if document.title_key:
+            if document.title_key and not _is_generic_title_key(document.title_key):
                 by_title.setdefault(document.title_key, set()).add(document.path)
             for term in document.terms:
                 by_term.setdefault(term, set()).add(document.path)
-        high_frequency_limit = min(200, max(25, len(documents) // 20))
+        idf = _idf_weights(document_frequency, len(documents))
 
         for document in documents:
             candidate_paths: set[str] = set()
-            if document.title_key:
+            if document.title_key and not _is_generic_title_key(document.title_key):
                 candidate_paths.update(by_title.get(document.title_key, set()))
             for term in document.terms:
                 term_paths = by_term.get(term, set())
-                if len(term_paths) <= high_frequency_limit or term in important_terms:
+                if len(term_paths) <= high_frequency_limit:
                     candidate_paths.update(term_paths)
             candidates = sorted(
                 (
-                    _score_semantic_candidate(document, by_path[candidate_path])
+                    _score_semantic_candidate(document, by_path[candidate_path], idf)
                     for candidate_path in candidate_paths
                     if candidate_path != document.path
                     and candidate_path in by_path
@@ -391,16 +431,19 @@ def _semantic_duplicate_findings(index_path: Path) -> tuple[MaintenanceFinding, 
 
 
 def _semantic_text(path: str, title: str, headings: str, tags: str, tasks: str, body: str) -> str:
-    return "\n".join(
-        part
-        for part in (
-            title,
-            headings,
-            tags,
-            tasks,
-            _strip_frontmatter(body),
-        )
-        if part
+    return URL_RE.sub(
+        " ",
+        "\n".join(
+            part
+            for part in (
+                title,
+                headings,
+                tags,
+                tasks,
+                _strip_frontmatter(body),
+            )
+            if part
+        ),
     )
 
 
@@ -416,24 +459,33 @@ def _strip_frontmatter(text: str) -> str:
     return text
 
 
-def _score_semantic_candidate(seed: _SemanticDocument, candidate: _SemanticDocument) -> _SemanticCandidate:
+def _score_semantic_candidate(
+    seed: _SemanticDocument,
+    candidate: _SemanticDocument,
+    idf: dict[str, float],
+) -> _SemanticCandidate:
     reasons: list[str] = []
     if _same_parent_folder(seed.path, candidate.path):
         score = _score_sibling_candidate(seed, candidate, reasons)
         return _SemanticCandidate(path=candidate.path, score=score, reasons=tuple(dict.fromkeys(reasons)))
 
     score = 0
-    if seed.title_key and seed.title_key == candidate.title_key:
+    if seed.title_key and seed.title_key == candidate.title_key and not _is_generic_title_key(seed.title_key):
         score += 70
         reasons.append("same title")
-    if seed.title_key and seed.title_key == candidate.stem.casefold():
+    if seed.title_key and seed.title_key == candidate.stem.casefold() and not _is_generic_title_key(seed.title_key):
         score += 50
         reasons.append("same note name")
     overlap = seed.terms & candidate.terms
-    if overlap:
-        coefficient = len(overlap) / max(1, min(len(seed.terms), len(candidate.terms)))
-        score += min(60, round(coefficient * 100))
-        reasons.append(f"shared terms: {', '.join(sorted(overlap)[:5])}")
+    if (
+        min(len(seed.terms), len(candidate.terms)) >= MIN_INFORMATIVE_TERMS
+        and len(overlap) >= MIN_SHARED_INFORMATIVE_TERMS
+    ):
+        similarity = _tfidf_cosine(seed.terms, candidate.terms, idf)
+        if similarity >= MIN_TFIDF_COSINE:
+            score += round(similarity * 100)
+            reasons.append(f"shared informative terms: {', '.join(sorted(overlap)[:5])}")
+            reasons.append(f"TF-IDF cosine: {similarity:.2f}")
     return _SemanticCandidate(path=candidate.path, score=score, reasons=tuple(dict.fromkeys(reasons)))
 
 
@@ -458,8 +510,8 @@ def _score_sibling_candidate(
     return score
 
 
-def _semantic_title_key(title: str, important_terms: frozenset[str]) -> str:
-    return " ".join(sorted(_semantic_terms(title, important_terms, frozenset()))).casefold()
+def _semantic_title_key(title: str) -> str:
+    return " ".join(sorted(_semantic_terms(title))).casefold()
 
 
 def _same_parent_folder(path_a: str, path_b: str) -> bool:
@@ -496,29 +548,50 @@ def _normalize_name(text: str) -> str:
     return re.sub(r"\s+", " ", text.casefold()).strip()
 
 
-def _semantic_terms(
-    text: str,
-    important_terms: frozenset[str],
-    stopwords: frozenset[str],
-) -> set[str]:
+def _semantic_terms(text: str) -> set[str]:
     return {
         token.casefold().strip("-_/")
         for token in WORD_RE.findall(text)
-        if _keep_semantic_token(token, important_terms, stopwords)
+        if _keep_semantic_token(token)
     }
 
 
-def _keep_semantic_token(
-    token: str,
-    important_terms: frozenset[str],
-    stopwords: frozenset[str],
-) -> bool:
+def _keep_semantic_token(token: str) -> bool:
     normalized = token.casefold().strip("-_/")
-    if normalized in important_terms:
-        return True
-    if normalized in stopwords:
+    if not any(char.isalpha() for char in normalized):
+        return False
+    if normalized in SEMANTIC_STOPWORDS:
         return False
     return len(normalized) > 2
+
+
+def _document_frequency(documents: list[_SemanticDocument]) -> dict[str, int]:
+    frequencies: dict[str, int] = {}
+    for document in documents:
+        for term in document.terms:
+            frequencies[term] = frequencies.get(term, 0) + 1
+    return frequencies
+
+
+def _idf_weights(document_frequency: dict[str, int], document_count: int) -> dict[str, float]:
+    return {
+        term: math.log((document_count + 1) / (frequency + 1)) + 1
+        for term, frequency in document_frequency.items()
+    }
+
+
+def _tfidf_cosine(left: frozenset[str], right: frozenset[str], idf: dict[str, float]) -> float:
+    numerator = sum(idf[term] ** 2 for term in left & right)
+    left_norm = math.sqrt(sum(idf[term] ** 2 for term in left))
+    right_norm = math.sqrt(sum(idf[term] ** 2 for term in right))
+    if not left_norm or not right_norm:
+        return 0.0
+    return numerator / (left_norm * right_norm)
+
+
+def _is_generic_title_key(title_key: str) -> bool:
+    title_terms = frozenset(title_key.split())
+    return bool(title_terms) and title_terms <= GENERIC_TITLE_TERMS
 
 
 def _is_under_roots(path: str, roots: tuple[str, ...]) -> bool:
