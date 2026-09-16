@@ -71,58 +71,6 @@ class ParaVaultBootstrapTests(unittest.TestCase):
             update_state = (tmp_path / "workspace" / ".state/update_check.yml").read_text(encoding="utf-8")
             self.assertIn(f"last_local_version: {INSTALLATION_VERSION}", update_state)
 
-    def test_setup_tasks_status_reports_missing_plugin(self):
-        with TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            workspace = tmp_path / "workspace"
-            workspace.mkdir()
-            vault_root = tmp_path / "vault"
-            vault_root.mkdir()
-            _write_config(workspace, vault_root)
-
-            output = StringIO()
-            previous_directory = Path.cwd()
-            try:
-                os.chdir(workspace)
-                with redirect_stdout(output):
-                    exit_code = main(["setup", "tasks-status"])
-            finally:
-                os.chdir(previous_directory)
-
-            self.assertEqual(exit_code, 1)
-            self.assertIn("Installed: no", output.getvalue())
-            self.assertIn("Enabled: no", output.getvalue())
-
-    def test_setup_tasks_status_reports_ready_plugin(self):
-        with TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            workspace = tmp_path / "workspace"
-            workspace.mkdir()
-            vault_root = tmp_path / "vault"
-            plugin_root = vault_root / ".obsidian" / "plugins" / "obsidian-tasks-plugin"
-            plugin_root.mkdir(parents=True)
-            (plugin_root / "manifest.json").write_text(
-                '{"id": "obsidian-tasks-plugin"}',
-                encoding="utf-8",
-            )
-            (vault_root / ".obsidian" / "community-plugins.json").write_text(
-                '["obsidian-tasks-plugin"]',
-                encoding="utf-8",
-            )
-            _write_config(workspace, vault_root)
-
-            output = StringIO()
-            previous_directory = Path.cwd()
-            try:
-                os.chdir(workspace)
-                with redirect_stdout(output):
-                    exit_code = main(["setup", "tasks-status"])
-            finally:
-                os.chdir(previous_directory)
-
-            self.assertEqual(exit_code, 0)
-            self.assertIn("Ready: yes", output.getvalue())
-
     def test_init_refuses_an_existing_personal_context(self):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -210,21 +158,3 @@ class ParaVaultBootstrapTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-def _write_config(workspace: Path, vault_root: Path) -> None:
-    config_path = workspace / "config" / "brainiac.yml"
-    config_path.parent.mkdir()
-    config_path.write_text(
-        f'''brainiac:
-  config_version: 1
-
-vault:
-  root: "{vault_root.as_posix()}"
-  layout: para
-
-index:
-  path: "memory/index/brainiac.sqlite"
-''',
-        encoding="utf-8",
-    )

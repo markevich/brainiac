@@ -33,16 +33,12 @@ be installed and enabled by the user in Obsidian:
 3. Browse, install, and enable **Tasks**.
 
 Do not install a plugin or change Obsidian settings without explicit user
-approval. After the user completes the UI step, verify it read-only:
-
-```bash
-PYTHONPATH=src python3 -m brainiac setup tasks-status
-```
-
-The command succeeds only when the Tasks manifest exists and
-`.obsidian/community-plugins.json` lists `obsidian-tasks-plugin` as enabled.
-If verification fails, keep `current_step: obsidian_tasks` and explain the
-missing condition. On success, write:
+approval. After the user completes the UI step, verify it read-only by checking
+that the vault has `.obsidian/plugins/obsidian-tasks-plugin/manifest.json` with
+plugin id `obsidian-tasks-plugin`, and that
+`.obsidian/community-plugins.json` lists the same id as enabled. If either
+condition fails, keep `current_step: obsidian_tasks` and explain the missing
+condition. On success, write:
 
 ```yaml
 status: complete

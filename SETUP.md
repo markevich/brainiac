@@ -83,11 +83,10 @@ Brainiac requires the community plugin **Tasks**. The user installs and enables
 it in Obsidian. Brainiac never installs third-party plugins or changes Obsidian
 settings without explicit approval.
 
-Verify the installation with:
-
-```bash
-PYTHONPATH=src python3 -m brainiac setup tasks-status
-```
+After the user completes the UI step, the operator verifies read-only that the
+vault contains `.obsidian/plugins/obsidian-tasks-plugin/manifest.json` with
+id `obsidian-tasks-plugin`, and that `.obsidian/community-plugins.json` lists
+the same id as enabled.
 
 Keep each checkbox in one source note. Use Tasks queries in `todo.md` or other
 dashboard notes to show live task views; do not create duplicate checkboxes.

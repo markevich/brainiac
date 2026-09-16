@@ -37,7 +37,6 @@ than copying checkboxes into `todo.md`.
 
 ```bash
 PYTHONPATH=src python3 -m brainiac init --vault-root /path/to/new-vault
-PYTHONPATH=src python3 -m brainiac setup tasks-status
 PYTHONPATH=src python3 -m brainiac scan
 PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 PYTHONPATH=src python3 -m brainiac search "query"

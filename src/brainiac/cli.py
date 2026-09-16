@@ -10,7 +10,6 @@ from .duplicates import inspect_duplicates, list_exact_duplicate_groups
 from .index import write_index
 from .index_status import read_index_info
 from .maintenance import maintenance_report
-from .obsidian import inspect_tasks_plugin
 from .para import require_para_layout
 from .retrieval import inspect_path, read_path, related_paths
 from .routing import find_duplicates, route_content
@@ -28,13 +27,6 @@ def main(argv: list[str] | None = None) -> int:
 
     init_parser = subparsers.add_parser("init", help="Create an empty PARA vault and its local Brainiac installation.")
     init_parser.add_argument("--vault-root", type=Path, required=True, help="Empty directory for the new vault.")
-
-    setup_parser = subparsers.add_parser("setup", help="Inspect required local setup prerequisites.")
-    setup_subparsers = setup_parser.add_subparsers(dest="setup_command", required=True)
-    setup_subparsers.add_parser(
-        "tasks-status",
-        help="Check whether the required Obsidian Tasks plugin is installed and enabled.",
-    )
 
     scan_parser = subparsers.add_parser("scan", help="Build a read-only vault inventory index.")
     scan_parser.add_argument(
@@ -130,8 +122,6 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "init":
             return _init(args)
-        if args.command == "setup":
-            return _setup(args)
         if args.command == "scan":
             return _scan(args)
         if args.command == "search":
@@ -171,25 +161,7 @@ def _init(args: argparse.Namespace) -> int:
     print(f"Created personal context: {result.personal_context_path}")
     print(f"Created setup state: {result.setup_state_path}")
     print(f"Created update state: {result.update_state_path}")
-    print("Next: complete personal context, enable required Obsidian Tasks, then run `brainiac scan`.")
-    return 0
-
-
-def _setup(args: argparse.Namespace) -> int:
-    if args.setup_command != "tasks-status":
-        raise ValueError(f"Unknown setup command: {args.setup_command}")
-
-    config = _load_config()
-    if config.root is None:
-        raise ValueError("vault.root is required in config/brainiac.yml.")
-    status = inspect_tasks_plugin(config.root)
-    print("Tasks plugin id: obsidian-tasks-plugin")
-    print(f"Installed: {'yes' if status.manifest_exists else 'no'}")
-    print(f"Enabled: {'yes' if status.enabled else 'no'}")
-    print(f"Ready: {'yes' if status.ready else 'no'}")
-    if not status.ready:
-        print("Next: enable Community plugins, install ‘Tasks’, and enable it in Obsidian.")
-        return 1
+    print("Next: complete setup through brainiac.md, then run `brainiac scan`.")
     return 0
 
 
