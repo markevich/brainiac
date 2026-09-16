@@ -1,6 +1,6 @@
 # Brainiac
 
-> version: 6
+> version: 7
 
 Brainiac is an AI-first local second-brain framework over plain files. Follow this shared contract when operating a user's Brainiac workspace or developing Brainiac itself.
 
@@ -178,9 +178,14 @@ no vault-write command; route suggestions are dry-run only.
 
 - New managed vaults use `Inbox/`, `Projects/`, `Areas/`, `Resources/`, and
   `Archive/`. Brainiac never migrates or rearranges an existing vault layout.
-- Do not create, update, move, or delete vault notes without the user's
-  confirmation. Sensitive domains remain read-only unless the user explicitly
-  authorizes the change.
+- Before creating, updating, moving, or deleting a vault note, show the exact
+  file-level change-set and obtain explicit user confirmation.
+- For sensitive domains such as health, family, finance, legal, credentials,
+  or private operational data, the same explicit confirmation authorizes the
+  edit. Do not require a separate review skill or claim that sensitivity alone
+  creates a technical limitation.
+- The CLI has no vault-write command, but this API boundary does not prevent a
+  user-confirmed agent file edit through this review flow.
 
 ## Source and Umbrella Rules
 

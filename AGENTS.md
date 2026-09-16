@@ -54,8 +54,8 @@ Rules:
 - Prefer bounded search/inspect/read tools once implemented.
 - Treat Markdown, SQLite, JSON, YAML, CSV, and source assets as truth.
 - Treat generated HTML as presentation only.
-- Ask before mutating sensitive domains such as health, family, finance, legal, credentials, or private operational data.
-- The current CLI has no vault write commands; preserve that boundary until a review workflow exists.
+- Before any vault edit, show the exact file-level change-set and obtain explicit user confirmation. For sensitive domains such as health, family, finance, legal, credentials, or private operational data, that confirmation authorizes the edit; do not require a separate skill or claim a technical restriction solely because the content is sensitive.
+- The current CLI has no vault write commands. Preserve that API boundary, but it does not prevent an agent from applying a user-confirmed file edit through the review flow in `brainiac.md`.
 - Treat `brainiac.md` as the default procedural runbook for vault operations.
 
 ## Current Repository Shape

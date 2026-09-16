@@ -240,8 +240,8 @@ Goal: expose a stable CLI surface as proper AI tools once it has been proven man
 
 - [ ] Decide MCP versus local HTTP only after CLI workflows stabilize.
 - [ ] Wrap stable read commands as tools.
-- [ ] Add explicit review-gated write operations only when the review workflow is mature.
-- [ ] Define policy enforcement and sensitive-domain checks before the first write command.
+- [ ] Add explicit confirmation-gated write operations only when the review workflow is mature.
+- [ ] Define policy enforcement before the first write command: show an exact change-set and accept explicit user confirmation for sensitive and ordinary notes alike, without a special review skill.
 
 Exit criterion: an operator can use Brainiac as a tool provider without losing bounded retrieval or write safety.
 

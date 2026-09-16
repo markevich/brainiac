@@ -27,6 +27,10 @@ New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resource
 
 After a material source update, inspect its umbrella backlinks and propose an umbrella update only if the change affects navigation, categories, status, ratings, or selection guidance.
 
+Before any vault edit, show the exact file-level change-set and obtain explicit
+user confirmation. This applies equally to health, family, finance, legal,
+credentials, and other sensitive notes; no separate review skill is required.
+
 ## Tasks
 
 The **Tasks** community plugin is required. Keep each checkbox in one
