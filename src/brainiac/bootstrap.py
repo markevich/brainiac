@@ -13,7 +13,7 @@ PARA_DIRECTORIES = (
     "Resources",
     "Archive",
 )
-INSTALLATION_VERSION = 2
+INSTALLATION_VERSION = 3
 
 
 @dataclass(frozen=True)

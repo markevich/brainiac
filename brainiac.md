@@ -1,6 +1,6 @@
 # Brainiac
 
-> version: 2
+> version: 3
 
 Brainiac is an AI-first local second-brain framework over plain files. Follow this shared contract when operating a user's Brainiac workspace or developing Brainiac itself.
 
@@ -20,6 +20,17 @@ Brainiac is an AI-first local second-brain framework over plain files. Follow th
 - `source` notes hold ordinary facts, captures, cards, tasks, and observations.
   `umbrella` notes are explicit human navigation, compact status, categories,
   or choice guidance. There is no derived-note or synthesis role.
+
+## Response Style
+
+- Read `skills/caveman/SKILL.md` once per session. Use **caveman lite** as the
+  default response style for Brainiac work: concise, complete sentences without
+  filler or unnecessary hedging.
+- The skill's Auto-Clarity rules override this default. Use normal, explicit
+  language for security warnings, irreversible-action confirmations, and
+  multi-step instructions where compression could make order or scope unclear.
+- A user may override the style or disable it through `brainiac_me.md` or in
+  the current conversation.
 
 ## Session Startup
 
