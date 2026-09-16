@@ -30,8 +30,10 @@ After a material source update, inspect its umbrella backlinks and propose an um
 ## Tasks
 
 The **Tasks** community plugin is required. Keep each checkbox in one
-contextual source note and build live task views with Tasks queries, rather
-than copying checkboxes into `todo.md`.
+contextual source note. `TODO.md` is the one quick-capture exception: add a
+canonical checkbox under `## Inbox`, then let its Tasks query show all other
+open tasks live, grouped by source path. Do not copy checkboxes into a
+dashboard or edit a query result.
 
 ## Commands
 

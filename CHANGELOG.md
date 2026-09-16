@@ -7,6 +7,8 @@ Detailed upgrade entries live in small version-range files so an LLM reads only 
 - `changelog/01-02.md`
 - `changelog/02-03.md`
 - `changelog/03-04.md`
+- `changelog/04-05.md`
+- `changelog/05-06.md`
 
 ## Rules
 

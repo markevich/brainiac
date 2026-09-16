@@ -2,8 +2,19 @@
 
 This repository is Brainiac: an AI-first local second-brain framework over plain files.
 
-Before doing substantial work in this repository, read `brainiac.md`. It is the
-single shared product and operating contract.
+For the first user-facing message of a new session, send exactly:
+
+```yaml
+                    B R A I N I A C   S E S S I O N   B O O T I N G
+```
+
+This banner is the sole exception to the rule below. Do not add any other
+text before reading `brainiac.md`, then follow its startup flow exactly.
+
+At the start of every other interaction in this repository, read `brainiac.md`
+before responding or taking any action. Do not defer it based on a judgment
+that the request is trivial or does not constitute substantial work:
+`brainiac.md` is the single shared product and operating contract.
 
 Read `docs/development-plan.md` only when discussing roadmap, choosing the
 next implementation work, or changing phase status.

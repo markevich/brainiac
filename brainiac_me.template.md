@@ -6,7 +6,7 @@
 ## Profile
 
 ```yaml
-installed_version: 4
+installed_version: 6
 language: ""
 ```
 

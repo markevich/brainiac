@@ -128,8 +128,9 @@ Goal: make a Brainiac installation resumable and safely updateable without a Pyt
 - [x] Define versioned LLM upgrade orchestration with `upgrade.md`, `CHANGELOG.md`, and small changelog ranges.
 - [x] Use `installed_version` as the final completion marker after migration validation.
 - [x] Require the Obsidian Tasks plugin through resumable setup and versioned
-  migration journals; keep task dashboards as live queries over canonical
-  source checkboxes.
+  migration journals; ship a `TODO.md` quick-capture dashboard whose Inbox
+  holds canonical tasks and whose live query aggregates every other source
+  checkbox without copies.
 
 Exit criteria:
 

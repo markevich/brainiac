@@ -31,6 +31,7 @@ class ParaVaultBootstrapTests(unittest.TestCase):
             self.assertFalse((workspace / "config/routing.yml").exists())
             self.assertEqual(load_vault_config(workspace / "config/brainiac.yml").layout, "para")
             self.assertTrue((workspace / "brainiac_me.md").is_file())
+            self.assertTrue((vault_root / "TODO.md").is_file())
             self.assertTrue((workspace / ".state/setup.yml").is_file())
             self.assertTrue((workspace / ".state/update_check.yml").is_file())
             self.assertIn("status: in_progress", (workspace / ".state/setup.yml").read_text(encoding="utf-8"))
@@ -57,6 +58,11 @@ class ParaVaultBootstrapTests(unittest.TestCase):
             self.assertIn("Created PARA vault", output.getvalue())
             for relative_path in PARA_DIRECTORIES:
                 self.assertTrue((vault_root / relative_path).is_dir())
+            todo_dashboard = (vault_root / "TODO.md").read_text(encoding="utf-8")
+            self.assertIn("brainiac_role: source", todo_dashboard)
+            self.assertIn("## Inbox", todo_dashboard)
+            self.assertIn("path does not include {{query.file.path}}", todo_dashboard)
+            self.assertIn("group by path", todo_dashboard)
             vault_config = workspace / "config" / "brainiac.yml"
             vault = load_vault_config(vault_config)
             self.assertEqual(vault.root, vault_root.resolve())
@@ -68,6 +74,8 @@ class ParaVaultBootstrapTests(unittest.TestCase):
             self.assertIn("## Personal Patterns", personal_context)
             template = (Path(__file__).resolve().parents[1] / "brainiac_me.template.md").read_text(encoding="utf-8")
             self.assertEqual(personal_context, template)
+            shared_contract = (Path(__file__).resolve().parents[1] / "brainiac.md").read_text(encoding="utf-8")
+            self.assertIn(f"> version: {INSTALLATION_VERSION}", shared_contract)
             update_state = (tmp_path / "workspace" / ".state/update_check.yml").read_text(encoding="utf-8")
             self.assertIn(f"last_local_version: {INSTALLATION_VERSION}", update_state)
 

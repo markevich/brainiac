@@ -46,6 +46,11 @@ current_step: complete
 last_note: "Personal context collected and Obsidian Tasks enabled."
 ```
 
+New managed vaults already contain a `TODO.md` quick-capture dashboard. Add
+new tasks under `## Inbox`; its Tasks query renders other open tasks live.
+Existing vaults receive this dashboard only through the versioned upgrade
+flow, with an explicit review and backup.
+
 ### Missing Brainiac Installation
 
 If `config/brainiac.yml` is missing, ask whether the user wants a new managed vault. For a new vault, run:

@@ -88,5 +88,7 @@ vault contains `.obsidian/plugins/obsidian-tasks-plugin/manifest.json` with
 id `obsidian-tasks-plugin`, and that `.obsidian/community-plugins.json` lists
 the same id as enabled.
 
-Keep each checkbox in one source note. Use Tasks queries in `todo.md` or other
-dashboard notes to show live task views; do not create duplicate checkboxes.
+Keep each checkbox in one source note. `TODO.md` is the quick-capture
+exception: its `## Inbox` contains canonical user-created checkboxes, and its
+live Tasks query excludes `TODO.md` before grouping all other open tasks by
+source path. Do not create duplicate checkboxes or edit query results.

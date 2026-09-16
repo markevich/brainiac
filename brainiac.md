@@ -1,6 +1,6 @@
 # Brainiac
 
-> version: 4
+> version: 6
 
 Brainiac is an AI-first local second-brain framework over plain files. Follow this shared contract when operating a user's Brainiac workspace or developing Brainiac itself.
 
@@ -19,6 +19,11 @@ Brainiac is an AI-first local second-brain framework over plain files. Follow th
   Brainiac.
 - The community plugin **Tasks** (`obsidian-tasks-plugin`) is mandatory for a
   managed vault. It provides live task views without copying checkboxes.
+- Each task has one canonical checkbox. Normally it belongs in the contextual
+  source note where the work arose.
+- `TODO.md` is the canonical quick-capture exception: a user may add tasks
+  directly under `## Inbox`. Its other task sections are live Tasks queries,
+  which exclude `TODO.md` so Inbox tasks are never rendered twice.
 - `source` notes hold ordinary facts, captures, cards, tasks, and observations.
   `umbrella` notes are explicit human navigation, compact status, categories,
   or choice guidance. There is no derived-note or synthesis role.
@@ -34,32 +39,90 @@ Brainiac is an AI-first local second-brain framework over plain files. Follow th
 - A user may override the style or disable it through `brainiac_me.md` or in
   the current conversation.
 
-## Session Startup
+## Session Startup — Core Loading
 
 Start from this file. It is the complete shared operating and product contract.
 The README is a repository landing page; read the development plan only for
 roadmap or implementation-priority work.
 
-1. Check whether `config/brainiac.yml` exists.
-2. If it is missing, read `setup/wizard.md` and follow **Missing Brainiac
-   Installation**. Do not scan a vault just to establish startup state.
-3. If it exists, read `.state/setup.yml`, `brainiac_me.md`, and
-   `.state/update_check.yml` in one bounded bootstrap pass.
-4. If one of those bootstrap files is missing, explain that the local
-   installation is incomplete and ask before recreating any file. Never
-   overwrite `brainiac_me.md`.
+### User-facing startup states
 
-If setup is not `complete`, read `setup/wizard.md` and resume from `current_step`. Do not scan the vault just to establish startup state.
+Entry-point wrappers may emit this exact early banner before this file is read:
 
-If setup is complete but the shared `version` in this file differs from
-`installed_version` in `brainiac_me.md`, read and follow `upgrade.md` before
-ordinary vault work. A version mismatch is sufficient; do not wait for the
-next weekly Git check. After a successful upgrade, update `last_local_version`
-in `.state/update_check.yml`.
+```yaml
+                    B R A I N I A C   S E S S I O N   B O O T I N G
+```
 
-If setup is complete and versions match, run the update check only when
-`last_checked_at` is empty or at least seven days old. The user may request an
-update check at any time, bypassing the interval.
+Treat it as the only pre-routing status message. Do not send a greeting,
+intermediate `LOADING` banner, status explanation, or ordinary answer until
+startup routing completes.
+
+Emit this exact ready-state banner only after startup has confirmed that
+ordinary vault work may begin:
+
+```yaml
+                    B R A I N I A C   S E S S I O N   L O A D E D
+```
+
+Keep the banner in English exactly as shown. Render all surrounding text in
+the user's language. The ready-state message may offer only current Brainiac
+capabilities: finding indexed material, checking index state, inspecting a
+known note, and running diagnostics. Do not advertise vault writes, automatic
+rewrites, or integrations that Brainiac does not provide.
+
+### Default startup procedure
+
+1. Treat canonical startup paths as already known. Do not use `rg`, `find`,
+   `ls`, or similar discovery commands before startup routing.
+2. Reuse host-provided working directory, shell, date, and timezone rather
+   than probing them again.
+3. Run exactly one bounded bootstrap read. It must check
+   `config/brainiac.yml` and, when that config exists, read
+   `.state/setup.yml`, `brainiac_me.md`, and `.state/update_check.yml`.
+   Do not run separate pre-check commands for those files.
+4. Route only from that bootstrap output. Do not scan a vault to establish
+   startup state or read broad vault context.
+
+Preferred bootstrap command:
+
+```bash
+/bin/zsh -lc '
+if [ ! -f config/brainiac.yml ]; then
+  printf "%s\\n" "--- CONFIG_MISSING ---"
+else
+  printf "%s\\n" "--- CONFIG_PRESENT ---"
+  for startup_file in .state/setup.yml brainiac_me.md .state/update_check.yml; do
+    if [ -f "$startup_file" ]; then
+      printf "%s\\n" "--- $startup_file ---"
+      sed -n "1,120p" "$startup_file"
+    else
+      printf "%s\\n" "--- MISSING $startup_file ---"
+    fi
+  done
+fi
+'
+```
+
+### Startup routing
+
+1. If `config/brainiac.yml` is missing, read `setup/wizard.md` and follow
+   **Missing Brainiac Installation**. Do not emit `LOADED`.
+2. If any bootstrap state file is missing, explain that the local installation
+   is incomplete and ask before recreating it. Never overwrite
+   `brainiac_me.md`. Do not emit `LOADED`.
+3. If setup is not `complete`, read `setup/wizard.md` and resume from
+   `current_step`. Do not emit `LOADED`.
+4. If the shared version in this file differs from `installed_version` in
+   `brainiac_me.md`, read and follow `upgrade.md` before ordinary vault work.
+   A version mismatch is sufficient; do not wait for the next weekly Git
+   check. After a successful upgrade, update `last_local_version` in
+   `.state/update_check.yml`. Do not emit `LOADED` until the upgrade finishes.
+5. If setup is complete and versions match, run the update check only when
+   `last_checked_at` is empty or at least seven days old. The user may request
+   an update check at any time, bypassing the interval. If an update requires
+   a user decision, resolve that decision before ordinary work.
+6. Once every applicable gate passes, emit one structured `LOADED` message
+   instead of a separate greeting. Keep it concise and end with an open prompt.
 
 ## Update Check
 
@@ -96,6 +159,20 @@ and follow `upgrade.md`.
 
 Vault files are truth and the SQLite index is disposable. The current CLI has
 no vault-write command; route suggestions are dry-run only.
+
+## Task Dashboard Rules
+
+- A `TODO.md` dashboard uses `brainiac_role: source`, because `## Inbox`
+  contains canonical user-created tasks. It may also contain live Tasks query
+  blocks as presentation, without becoming a derived-note role.
+- New managed vaults use the standard `TODO.md` template: `## Inbox` followed
+  by an `## Open tasks` query with `path does not include {{query.file.path}}`
+  and `group by path`.
+- A dashboard must not copy a checkbox from another note. A user can create a
+  task directly in `TODO.md` only under `## Inbox`; moving it later is an
+  explicit edit that removes the original checkbox after confirmation.
+- Do not add a checkbox inside a query result. Update the canonical source
+  checkbox instead.
 
 ## Vault Change Rules
 

@@ -13,7 +13,7 @@ PARA_DIRECTORIES = (
     "Resources",
     "Archive",
 )
-INSTALLATION_VERSION = 4
+INSTALLATION_VERSION = 6
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class ParaVaultInitialization:
     vault_root: Path
     config_path: Path
     personal_context_path: Path
+    todo_dashboard_path: Path
     setup_state_path: Path
     update_state_path: Path
     created_directories: tuple[Path, ...]
@@ -39,6 +40,7 @@ def initialize_para_vault(
     config_path = config_path.expanduser().resolve()
     workspace_root = config_path.parent.parent
     personal_context_path = workspace_root / "brainiac_me.md"
+    todo_dashboard_path = vault_root / "TODO.md"
     setup_state_path = workspace_root / ".state" / "setup.yml"
     update_state_path = workspace_root / ".state" / "update_check.yml"
     _validate_preconditions(
@@ -53,6 +55,8 @@ def initialize_para_vault(
     for directory in created_directories:
         directory.mkdir(parents=True, exist_ok=False)
 
+    todo_dashboard_path.write_text(_todo_dashboard_text(), encoding="utf-8")
+
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(_brainiac_config_text(vault_root), encoding="utf-8")
     personal_context_path.write_text(_personal_context_text(), encoding="utf-8")
@@ -64,6 +68,7 @@ def initialize_para_vault(
         vault_root=vault_root,
         config_path=config_path,
         personal_context_path=personal_context_path,
+        todo_dashboard_path=todo_dashboard_path,
         setup_state_path=setup_state_path,
         update_state_path=update_state_path,
         created_directories=created_directories,
@@ -156,6 +161,27 @@ Local path: `/path/to/project`
 ## Personal Patterns
 
 - Add preferences and custom working instructions here.
+'''
+
+
+def _todo_dashboard_text() -> str:
+    return '''---
+brainiac_role: source
+---
+
+# TODO
+
+## Inbox
+
+<!-- Add quick-capture tasks here as: - [ ] task -->
+
+## Open tasks
+
+```tasks
+not done
+path does not include {{query.file.path}}
+group by path
+```
 '''
 
 

@@ -159,6 +159,7 @@ def _init(args: argparse.Namespace) -> int:
         print(f"  {directory.relative_to(result.vault_root).as_posix()}/")
     print(f"Created Brainiac config: {result.config_path}")
     print(f"Created personal context: {result.personal_context_path}")
+    print(f"Created TODO dashboard: {result.todo_dashboard_path}")
     print(f"Created setup state: {result.setup_state_path}")
     print(f"Created update state: {result.update_state_path}")
     print("Next: complete setup through brainiac.md, then run `brainiac scan`.")
