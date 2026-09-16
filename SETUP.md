@@ -7,7 +7,7 @@ Brainiac separates shared instructions, local personal context, and CLI configur
 - `brainiac.md` — tracked shared LLM contract.
 - `brainiac_me.md` — gitignored personal context and installation version.
 - `config/brainiac.yml` — gitignored CLI config for a vault.
-- `.state/` — gitignored setup and update-check state.
+- `.state/` — gitignored setup, update-check, backup, and migration-journal state.
 
 `brainiac init` creates the local CLI config, personal-context scaffold, and
 two state files for a new managed vault. The generated personal context starts
@@ -19,7 +19,7 @@ When an LLM helps a user onboard Brainiac, it should do this in order:
 
 1. Ask whether this is a new vault or an existing vault.
 2. For a new vault, run `brainiac init --vault-root /path/to/new-vault`. It creates the PARA roots, `config/brainiac.yml`, `brainiac_me.md`, and `.state/`.
-3. Resume `setup/wizard.md` through the shared startup flow in `brainiac.md` to fill personal context. `brainiac.md` is also the sole shared operator contract for later sessions.
+3. Resume `setup/wizard.md` through the shared startup flow in `brainiac.md` to fill personal context and enable the required **Tasks** community plugin. `brainiac.md` is also the sole shared operator contract for later sessions.
 4. Brainiac does not migrate an existing vault layout.
 5. Run `PYTHONPATH=src python3 -m brainiac scan` after setup is complete.
 
@@ -76,3 +76,18 @@ PYTHONPATH=src python3 -m brainiac scan
 ```
 
 That builds the disposable index for the configured vault.
+
+## Required Obsidian Plugin
+
+Brainiac requires the community plugin **Tasks**. The user installs and enables
+it in Obsidian. Brainiac never installs third-party plugins or changes Obsidian
+settings without explicit approval.
+
+Verify the installation with:
+
+```bash
+PYTHONPATH=src python3 -m brainiac setup tasks-status
+```
+
+Keep each checkbox in one source note. Use Tasks queries in `todo.md` or other
+dashboard notes to show live task views; do not create duplicate checkboxes.

@@ -127,6 +127,9 @@ Goal: make a Brainiac installation resumable and safely updateable without a Pyt
 - [x] Define a weekly Git update check that asks before `git pull --ff-only`.
 - [x] Define versioned LLM upgrade orchestration with `upgrade.md`, `CHANGELOG.md`, and small changelog ranges.
 - [x] Use `installed_version` as the final completion marker after migration validation.
+- [x] Require the Obsidian Tasks plugin through resumable setup and versioned
+  migration journals; keep task dashboards as live queries over canonical
+  source checkboxes.
 
 Exit criteria:
 

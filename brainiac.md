@@ -1,6 +1,6 @@
 # Brainiac
 
-> version: 3
+> version: 4
 
 Brainiac is an AI-first local second-brain framework over plain files. Follow this shared contract when operating a user's Brainiac workspace or developing Brainiac itself.
 
@@ -17,6 +17,8 @@ Brainiac is an AI-first local second-brain framework over plain files. Follow th
 - New managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`,
   and `Archive/`. Existing vault layouts are never migrated or rearranged by
   Brainiac.
+- The community plugin **Tasks** (`obsidian-tasks-plugin`) is mandatory for a
+  managed vault. It provides live task views without copying checkboxes.
 - `source` notes hold ordinary facts, captures, cards, tasks, and observations.
   `umbrella` notes are explicit human navigation, compact status, categories,
   or choice guidance. There is no derived-note or synthesis role.
@@ -139,5 +141,7 @@ When changing this shared installation flow:
 2. Add a matching entry and `### Migration` section to `changelog/` through `CHANGELOG.md`.
 3. Make every migration idempotent: it verifies its target state before
    changing files, safely skips completed work, and validates its final state.
-4. Keep `upgrade.md`, `setup/`, and templates aligned.
-5. Commit the change together.
+4. Record each non-`none` migration in `.state/migrations/v<version>.yml` with
+   `status`, `current_step`, and `last_note` so it can resume safely.
+5. Keep `upgrade.md`, `setup/`, and templates aligned.
+6. Commit the change together.

@@ -13,7 +13,8 @@ Markdown and structured files are truth. The index is an incremental, rebuildabl
 - `brainiac.md` is the tracked shared LLM contract and update flow.
 - `brainiac_me.md` is the gitignored personal context and overrides shared instructions on conflicts.
 - `config/brainiac.yml` is the gitignored CLI config for one vault.
-- `.state/` contains resumable setup and weekly update-check state.
+- `.state/` contains resumable setup, weekly update-check, backup, and
+  version-migration state.
 
 ## Vault layout
 
@@ -26,10 +27,17 @@ New Brainiac-managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resource
 
 After a material source update, inspect its umbrella backlinks and propose an umbrella update only if the change affects navigation, categories, status, ratings, or selection guidance.
 
+## Tasks
+
+The **Tasks** community plugin is required. Keep each checkbox in one
+contextual source note and build live task views with Tasks queries, rather
+than copying checkboxes into `todo.md`.
+
 ## Commands
 
 ```bash
 PYTHONPATH=src python3 -m brainiac init --vault-root /path/to/new-vault
+PYTHONPATH=src python3 -m brainiac setup tasks-status
 PYTHONPATH=src python3 -m brainiac scan
 PYTHONPATH=src python3 -m brainiac index info --check-filesystem
 PYTHONPATH=src python3 -m brainiac search "query"
