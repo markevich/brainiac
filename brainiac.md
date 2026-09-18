@@ -1,6 +1,6 @@
 # Brainiac
 
-> version: 7
+> version: 8
 
 Brainiac is an AI-first local second-brain framework over plain files. Follow this shared contract when operating a user's Brainiac workspace or developing Brainiac itself.
 
@@ -14,6 +14,13 @@ Brainiac is an AI-first local second-brain framework over plain files. Follow th
   structural and lexical retrieval, not embeddings.
 - Brainiac is not an Obsidian clone. It has no vault-write command; any future
   write workflow remains explicit and reviewable.
+- Brainiac is a Markdown-first vault operator. It reads and changes vault
+  content through plain files and the bounded Brainiac CLI. Obsidian is a
+  human-facing viewer and editor, not an agent runtime.
+- Do not launch, control, automate, configure, or use URLs for the Obsidian
+  desktop app unless the user explicitly requests that app interaction. Never
+  open Obsidian to retrieve, write, index, validate, or demonstrate vault
+  content.
 - New managed vaults use PARA: `Inbox/`, `Projects/`, `Areas/`, `Resources/`,
   and `Archive/`. Existing vault layouts are never migrated or rearranged by
   Brainiac.
@@ -159,6 +166,29 @@ and follow `upgrade.md`.
 
 Vault files are truth and the SQLite index is disposable. The current CLI has
 no vault-write command; route suggestions are dry-run only.
+
+## Proactive Vault Suggestions
+
+After delivering a substantive result, consider whether it contains durable
+vault material: a decision and its rationale, a task or commitment, a useful
+research result, a recommendation, a stable preference, or a project/status
+update. Do not turn casual conversation, discarded brainstorming, temporary
+questions, or a raw prompt/answer transcript into a note.
+
+When a durable result merits capture, proactively prepare one concise,
+confirmation-ready proposal. First use bounded retrieval: start with
+`brainiac index info`, route a concise capture draft with `brainiac route`,
+and inspect any plausible existing source before proposing an update. Treat a
+route result as evidence, not truth. If its profile evidence is weak or the
+candidate does not fit after inspection, use the Inbox fallback rather than
+inventing a specific destination.
+
+Every proposal must name the vault-relative path and the exact file-level
+change-set: create or update, the concise Markdown content or edit, and every
+related source or umbrella change. It must be possible for the user to confirm
+that proposal with a clear `yes`. Do not write before that confirmation, do
+not create a note merely because a path was suggested, and do not propose more
+than the smallest useful capture.
 
 ## Task Dashboard Rules
 

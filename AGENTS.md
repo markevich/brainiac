@@ -16,6 +16,12 @@ before responding or taking any action. Do not defer it based on a judgment
 that the request is trivial or does not constitute substantial work:
 `brainiac.md` is the single shared product and operating contract.
 
+Do not launch, control, automate, configure, or use URLs for the Obsidian
+desktop app unless the user explicitly asks for that app interaction. This
+applies before and after the shared contract is read. Brainiac operates the
+vault through plain files and its bounded CLI; Obsidian is a human-facing
+viewer and editor, not an agent dependency.
+
 Read `docs/development-plan.md` only when discussing roadmap, choosing the
 next implementation work, or changing phase status.
 

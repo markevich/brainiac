@@ -76,6 +76,9 @@ class ParaVaultBootstrapTests(unittest.TestCase):
             self.assertEqual(personal_context, template)
             shared_contract = (Path(__file__).resolve().parents[1] / "brainiac.md").read_text(encoding="utf-8")
             self.assertIn(f"> version: {INSTALLATION_VERSION}", shared_contract)
+            self.assertIn("## Proactive Vault Suggestions", shared_contract)
+            self.assertIn("Every proposal must name the vault-relative path", shared_contract)
+            self.assertIn("Do not launch, control, automate, configure, or use URLs", shared_contract)
             update_state = (tmp_path / "workspace" / ".state/update_check.yml").read_text(encoding="utf-8")
             self.assertIn(f"last_local_version: {INSTALLATION_VERSION}", update_state)
 
